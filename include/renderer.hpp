@@ -1,0 +1,28 @@
+// ****************************************************************************
+/// @file renderer.hpp
+/// @author Kyle Webster
+/// @version 0.1
+/// @date 30 Nov 2025
+/// @brief Definition of renderer
+// ****************************************************************************
+#pragma once
+// ** Includes ************************
+#include <string>
+#include "LodePNG/lodepng.h"
+#include "cg.hpp"
+// ************************************
+
+class Renderer
+{
+public:
+  nl::cg::image<nl::cg::sRGB> image;
+  nl::cg::scene scene;
+
+  void render();
+  nl::cg::linRGB tracePath(nl::cg::ray const &ray) const;
+
+  void loadScene(std::string fpath);
+  void saveImage(std::string fname) const;
+};
+
+// ****************************************************************************

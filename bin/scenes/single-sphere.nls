@@ -1,0 +1,16 @@
+{
+  "camera": {
+    "pos": [0, -5, 0],
+    "look_at": [0, 0, 0],
+    "up": [0, 0, 1],
+    "fov": 30,
+    "ar": 1.778,
+    "width": 1280},
+  "lights": [{"name":"ambient", "type":"ambient", "irradiance": [1,1,1]}],
+  "objects": [{
+    "name":"sphere1", 
+    "type":"sphere", 
+    "transform": {},
+    "material": "diffuse"}],
+  "materials": [{"name":"diffuse", "type":"lambertian", "albedo":[0,1,1]}]
+}

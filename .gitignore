@@ -39,3 +39,12 @@
 
 # debug information files
 *.dwo
+
+# .vscode folder
+.vscode
+
+# executable
+bin/lambda
+
+# build folder
+build/
