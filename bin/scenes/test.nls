@@ -1,0 +1,35 @@
+{
+  "camera": {
+    "pos": [0, -10, 3],
+    "look_at": [0, 0, 0],
+    "up": [0, 0, 1],
+    "fov": 50,
+    "ar": 1.778,
+    "width": 1280},
+  "lights": [{
+    "name": "sphere_light", 
+    "type": "sphere", 
+    "transform": {"scale": [0.3, 0.3, 0.3], "translate": [1,-1,3]},
+    "radiance": [200,190,170]}],
+  "objects": [
+    {
+      "name":"sphere1", 
+      "type":"sphere", 
+      "transform": {},
+      "material": "diffuse"},
+    {
+      "name":"bottom",
+      "type":"plane",
+      "transform": {"translate": [0,0,-1], "scale": [8,8,1]},
+      "material": "gray"},
+    {
+      "name":"backdrop",
+      "type":"plane",
+      "transform": {"scale": [8,8,1],
+                    "rotate": {"axis":[1,0,0], "degrees": 90},
+                    "translate": [0,8,7]},
+      "material": "gray"}],
+  "materials": [
+    {"name":"diffuse", "type":"lambertian", "albedo":[0,1,1]},
+    {"name":"gray", "type":"lambertian", "albedo":[0.65,0.63,0.6]}]
+}

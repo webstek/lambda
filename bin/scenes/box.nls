@@ -29,42 +29,38 @@
     "transform": {"scale": [5,5,5], "translate": [-9,-3,5]},
     "material": "smooth"},
   {
-    "name": "box",
-    "type": "group",
-    "transform": {"translate": [0, 0, 12]},
-    "children": [
-      {
-        "name": "wall-bottom",
-        "type": "plane",
-        "transform": {"scale": [32, 32, 1], "translate": [0,0,-12]},
-        "material": "wall-grey"},
-      {
-        "name": "wall-top",
-        "type": "plane",
-        "transform": {"scale": [32, 32, 1], "translate": [0,0,12]},
-        "material": "wall-grey"},
-      {
-        "name": "wall-left",
-        "type": "plane",
-        "transform": {"scale": [32, 32, 1], 
-                      "rotate": {"axis": [1,0,0], "degrees": 90}, 
-                      "translate": [0,20,0]},
-        "material": "wall-grey"},
-      {
-        "name": "wall-back",
-        "type": "plane",
-        "transform": {"scale": [32, 32, 1], 
-                      "rotate": {"axis": [0,1,0], "degrees": 90}, 
-                      "translate": [-15,0,0]},
-        "material": "wall-red"},
-      {
-        "name": "wall-back",
-        "type": "plane",
-        "transform": {"scale": [32, 32, 1], 
-                      "rotate": {"axis": [0,1,0], "degrees": -90}, 
-                      "translate": [15,0,0]},
-        "material": "wall-green"}
-    ]}],
+    "name": "wall-top",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1],
+                  "translate": [0,0,24],
+                  "rotate": {"axis":[1,0,0], "degrees": 180}},
+    "material": "wall-grey"},
+  {
+    "name": "wall-bot",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1]},
+    "material": "wall-grey"},
+  {
+    "name": "wall-back",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1], 
+                  "rotate": {"axis": [1,0,0], "degrees": 90}, 
+                  "translate": [0,20,12]},
+    "material": "wall-grey"},
+  {
+    "name": "wall-left",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1], 
+                  "rotate": {"axis": [0,1,0], "degrees": 90}, 
+                  "translate": [-15,0,12]},
+    "material": "wall-red"},
+  {
+    "name": "wall-back",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1], 
+                  "rotate": {"axis": [0,1,0], "degrees": -90}, 
+                  "translate": [15,0,12]},
+    "material": "wall-green"}],
 "materials": [
   {
     "name": "wall-grey",

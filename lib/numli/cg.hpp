@@ -134,8 +134,9 @@ struct vec
 {
   ℝ4 dir;
   constexpr vec() {dir[3]=0.f;}
-  constexpr vec(float (&x)[3]) {for(size_t i=0;i<3;i++)dir[i]=x[i];dir[3]=0.f;}
-  constexpr vec(vec const &v)  {for(size_t i=0;i<3;i++)dir[i]=v.dir[i];}
+  constexpr vec(float const (&x)[3]) 
+    { for (size_t i=0;i<3;i++) dir[i]=x[i]; dir[3]=0.f; }
+  constexpr vec(vec const &v)  {for(size_t i=0;i<4;i++)dir[i]=v.dir[i];}
   constexpr vec(ℝ3 const &x)   {for(size_t i=0;i<3;i++)dir[i]=x[i];dir[3]=0.f;}
   constexpr vec(ℝ4 const &x)   {for(size_t i=0;i<3;i++)dir[i]=x[i];dir[3]=0.f;}
 };
@@ -153,8 +154,9 @@ struct pnt
 {
   ℝ4 pos;
   constexpr pnt() {pos[3]=1.f;}
-  constexpr pnt(float (&x)[3]) {for(size_t i=0;i<3;i++)pos[i]=x[i];pos[3]=1.f;}
-  constexpr pnt(pnt const &v)  {for(size_t i=0;i<3;i++)pos[i]=v.pos[i];}
+  constexpr pnt(float const (&x)[3]) 
+    { for (size_t i=0;i<3;i++) pos[i]=x[i]; pos[3]=1.f; }
+  constexpr pnt(pnt const &v)  {for(size_t i=0;i<4;i++)pos[i]=v.pos[i];}
   constexpr pnt(ℝ3 const &x)   {for(size_t i=0;i<3;i++)pos[i]=x[i];pos[3]=1.f;}
   constexpr pnt(ℝ4 const &x)   {for(size_t i=0;i<3;i++)pos[i]=x[i];pos[3]=1.f;}
 };
@@ -178,22 +180,6 @@ struct basis
   basis() = default;
   basis(ℝ3 const &e0, ℝ3 const &e1, ℝ3 const &e2) : x(e0), y(e1), z(e2) {}
 };
-
-
-	// void GetOrthonormals ( Vec3 &v0, Vec3 &v1 ) const	//!< Returns two orthogonal vectors to this vector, forming an orthonormal basis
-	// {
-	// 	if ( z >= y ) {
-	// 		T const a = T(1)/(1 + z);
-	// 		T const b = -x*y*a;
-	// 		v0.Set( 1 - x*x*a, b, -x );
-	// 		v1.Set( b, 1 - y*y*a, -y );
-	// 	} else {
-	// 		T const a = T(1)/(1 + y);
-	// 		T const b = -x*z*a;
-	// 		v0.Set( b, -z, 1 - z*z*a );
-	// 		v1.Set( 1 - x*x*a, -x, b );
-	// 	}
-	// }
 
 /// @brief returns an orthonormal basis with the e0^e1 = e2 = v.normalized()
 /// @details
@@ -253,7 +239,7 @@ struct transform
   /// @name member functions
   constexpr ℝ3 pos() const {return bra::column<3>(M,3);}
   constexpr ray toLocal(ray const &_ray) const
-    {return ray(M_inv*ℝ4(_ray.p,1.f), M_inv*ℝ4(_ray.u,0.f)); }
+    { return ray(M_inv*ℝ4(_ray.p,1.f), M_inv*ℝ4(_ray.u,0.f)); }
   constexpr ℝ3 toWorld(pnt p) const { return ℝ3(M*p.pos); }
   constexpr ℝ3 toWorld(vec v) const { return ℝ3(M*v.dir); }
   constexpr ℝ3 toWorld(normal n) const 
@@ -267,30 +253,30 @@ struct transform
     return T;
   }
   static constexpr transform rotate(ℝ3 const &u, float degrees)
-  { // using Rodrigues' formula R(u,θ) = cosθI+(1-cosθ)*outer(u)+sinθ*skew(u)
+  { // using Rodrigues' formula R(u,θ) = cosθI+(1-cosθ)*outer(u)-sinθ*skew(u)
     transform T;
     const float θ = deg2rad(degrees);
     const float cosθ = cosf32(θ);
     const float sinθ = sinf32(θ);
     T.M(0,0) = cosθ + (1-cosθ)*u[0]*u[0];
-    T.M(0,1) = (1-cosθ)*u[0]*u[1]-sinθ*u[2];
-    T.M(0,2) = (1-cosθ)*u[0]*u[2]+sinθ*u[1];
-    T.M(1,0) = (1-cosθ)*u[1]*u[0]+sinθ*u[2];
+    T.M(0,1) = (1-cosθ)*u[0]*u[1]+sinθ*u[2];
+    T.M(0,2) = (1-cosθ)*u[0]*u[2]-sinθ*u[1];
+    T.M(1,0) = (1-cosθ)*u[1]*u[0]-sinθ*u[2];
     T.M(1,1) = cosθ + (1-cosθ)*u[1]*u[1];
-    T.M(1,2) = (1-cosθ)*u[1]*u[2]-sinθ*u[0];
-    T.M(2,0) = (1-cosθ)*u[2]*u[0]-sinθ*u[1];
-    T.M(2,1) = (1-cosθ)*u[2]*u[1]+sinθ*u[0];
+    T.M(1,2) = (1-cosθ)*u[1]*u[2]+sinθ*u[0];
+    T.M(2,0) = (1-cosθ)*u[2]*u[0]+sinθ*u[1];
+    T.M(2,1) = (1-cosθ)*u[2]*u[1]-sinθ*u[0];
     T.M(2,2) = cosθ + (1-cosθ)*u[2]*u[2];
 
     // replace θ with -θ for inverse
     T.M_inv(0,0) = cosθ + (1-cosθ)*u[0]*u[0];
-    T.M_inv(0,1) = (1-cosθ)*u[0]*u[1]+sinθ*u[2];
-    T.M_inv(0,2) = (1-cosθ)*u[0]*u[2]-sinθ*u[1];
-    T.M_inv(1,0) = (1-cosθ)*u[1]*u[0]-sinθ*u[2];
+    T.M_inv(0,1) = (1-cosθ)*u[0]*u[1]-sinθ*u[2];
+    T.M_inv(0,2) = (1-cosθ)*u[0]*u[2]+sinθ*u[1];
+    T.M_inv(1,0) = (1-cosθ)*u[1]*u[0]+sinθ*u[2];
     T.M_inv(1,1) = cosθ + (1-cosθ)*u[1]*u[1];
-    T.M_inv(1,2) = (1-cosθ)*u[1]*u[2]+sinθ*u[0];
-    T.M_inv(2,0) = (1-cosθ)*u[2]*u[0]+sinθ*u[1];
-    T.M_inv(2,1) = (1-cosθ)*u[2]*u[1]-sinθ*u[0];
+    T.M_inv(1,2) = (1-cosθ)*u[1]*u[2]-sinθ*u[0];
+    T.M_inv(2,0) = (1-cosθ)*u[2]*u[0]-sinθ*u[1];
+    T.M_inv(2,1) = (1-cosθ)*u[2]*u[1]+sinθ*u[0];
     T.M_inv(2,2) = cosθ + (1-cosθ)*u[2]*u[2];
     return T;
   }
@@ -586,17 +572,38 @@ constexpr bool sphere(cg::sphere const &s, ray const &w_ray, hitinfo &hinfo)
   float const φ = atan2f32(p[1],p[0]);
   ℝ3 const t_vec = {-sinθ*sinf(φ),sinθ*cosf(φ),0.f};
 
-  // populate hitinfo in world space
+  // populate hinfo in world space
   hinfo.z = t;
   hinfo.p = s.T.toWorld(pnt(p));
-  hinfo.n = s.T.toWorld(normal(n));
-  hinfo.tangent = s.T.toWorld(vec(t_vec));
+  hinfo.n = s.T.toWorld(normal(n)).normalized();
+  hinfo.tangent = s.T.toWorld(vec(t_vec)).normalized();
   hinfo.front = front;
   hinfo.mat = s.mat;
   hinfo.obj = s.obj;
   return true;
 }
 // ************************************
+
+/// @brief Plane-Ray intersection
+constexpr bool plane(cg::plane const &p, ray const &w_ray, hitinfo &hinfo)
+{
+  ray const l_ray = p.T.toLocal(w_ray);
+  float const t = -l_ray.p[2] / l_ray.u[2];
+  ℝ3 const x = l_ray.p+t*l_ray.u;
+  if (x[0]<-1.f || x[0]>1.f || x[1]<-1.f || x[1]>1.f || t<BIAS || t>hinfo.z) 
+    [[likely]] { return false; } // ray misses
+  
+  // populate hinfo in world space
+  hinfo.z = t;
+  hinfo.p = p.T.toWorld(pnt(x));
+  hinfo.n = p.T.toWorld(normal({0.f,0.f,1.f})).normalized();
+  hinfo.tangent = p.T.toWorld(vec({0.f,1.f,0.f})).normalized();
+  hinfo.front = l_ray.u[2]<0.f;
+  hinfo.mat = p.mat;
+  hinfo.obj = p.obj;
+  return true;
+}
+
 
 /// @brief finds the intersection closest to the ray origin in the scene
 /// @param sc scene to search for intersection in
@@ -617,6 +624,7 @@ constexpr bool scene(
     if (i==skip) continue;
     const bool hit = std::visit(Overload{
       [&](cg::sphere const &s){return sphere(s, r, h);},
+      [&](cg::plane const &p){return plane(p,r,h);},
       [] (auto const &) {return false;}},
       sc.objects[i]);
     hit_any |= hit;
@@ -687,9 +695,10 @@ inline void spherelight(
   info.val = ωi;
 
   // get L(ωi)
-  hitinfo unused;
+  hitinfo temp;
+  temp.z = std::sqrtf(dist2);
   float const shadowing = 
-    intersect::scene(sc,{hinfo.p, ωi},unused,sl._sphere.obj) ? 0.f : 1.f;
+    intersect::scene(sc,{hinfo.p, ωi},temp,sl._sphere.obj) ? 0.f : 1.f;
   info.mult = sl.radiance*shadowing;
 }
 
