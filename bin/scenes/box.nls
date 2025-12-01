@@ -11,7 +11,7 @@
     "name": "sphere-light",
     "type": "sphere",
     "transform": {"translate": [0,0,18]},
-    "radiance": [500, 500, 500]}],
+    "radiance": [159,159,159]}],
 "objects": [
   {
     "name": "sphere1",
