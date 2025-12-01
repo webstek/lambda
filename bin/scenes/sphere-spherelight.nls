@@ -1,0 +1,20 @@
+{
+  "camera": {
+    "pos": [0, -7, 0],
+    "look_at": [0, 0, 0],
+    "up": [0, 0, 1],
+    "fov": 50,
+    "ar": 1.778,
+    "width": 1280},
+  "lights": [{
+    "name": "sphere_light", 
+    "type": "sphere", 
+    "transform": {"scale": [0.3, 0.3, 0.3], "translate": [1,-1,5]},
+    "radiance": [10,10,10]}],
+  "objects": [{
+    "name":"sphere1", 
+    "type":"sphere", 
+    "transform": {},
+    "material": "diffuse"}],
+  "materials": [{"name":"diffuse", "type":"lambertian", "albedo":[0,1,1]}]
+}

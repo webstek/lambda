@@ -15,11 +15,11 @@
 class Renderer
 {
 public:
-  nl::cg::image<nl::cg::sRGB> image;
+  nl::cg::image<nl::cg::rgb24> image;
   nl::cg::scene scene;
 
   void render();
-  nl::cg::linRGB tracePath(nl::cg::ray const &ray) const;
+  nl::cg::linRGB tracePath(nl::cg::ray const &ray, nl::RNG &rng) const;
 
   void loadScene(std::string fpath);
   void saveImage(std::string fname) const;

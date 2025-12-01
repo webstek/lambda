@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file numli.hpp
 /// @author Kyle Webster
-/// @version 0.1
-/// @date 22 Nov 2025
+/// @version 0.3
+/// @date 1 Dec 2025
 /// @brief Numerics Library - SIMD @ref simd
 /// @details
 /// Collection of functions and utilities for SIMD use

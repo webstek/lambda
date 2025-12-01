@@ -4,7 +4,7 @@
 
 CXX := g++
 CXXFLAGS := -std=c++23 -Wall -Wextra
-DEBUG_FLAGS := -g -DDEBUG
+DEBUG_FLAGS := -g -DDEBUG -Wno-deprecated-literal-operator
 RELEASE_FLAGS := -O3
 
 SRC_DIR := src

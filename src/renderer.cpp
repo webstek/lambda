@@ -8,30 +8,63 @@
 #include "renderer.hpp"
 // ************************************
 using namespace nl::cg;
+using ℝ3 = nl::ℝ3;
+// ************************************
 
 void Renderer::render()
 {
-  const uint w = scene.cam.width; const uint h = scene.cam.height;
+  const uint64_t w = scene.cam.width; const uint64_t h = scene.cam.height;
   image.init(w,h);
 
-  uint px_idx = 0;
-  for (uint i=0; i<h; i++) for (uint j=0; j<w; j++, px_idx++)
+  uint64_t px_idx = 0;
+  for (uint64_t i=0; i<h; i++) for (uint64_t j=0; j<w; j++, px_idx++)
   {
-    auto ray = sample::camera(scene.cam, {float(i+.5f),float(j+.5f),0.f,0.f});
-    linRGB radiance = tracePath(ray);
-    image.data[px_idx] = tosRGB(radiance);
+    nl::RNG rng(px_idx);
+    sample::info<ray> si;
+    nl::ℝ2 uv = {float(j+.5f),float(i+.5f)};
+    sample::camera(scene.cam, uv, si, rng);
+    linRGB radiance = tracePath(si.val, rng);
+    image.data[px_idx] = sRGB2rgb24(linRGB2sRGB(radiance));
   }
 }
+// ****************************************************************************
 
-linRGB Renderer::tracePath(ray const &ray) const
+/// @todo Only handles direct lighting paths at the moment (DL by NEE) 
+linRGB Renderer::tracePath(ray const &ray, nl::RNG &rng) const
 {
-  hitinfo h_info;
-  if (intersect::scene(scene, ray, h_info))
+  hitinfo hinfo;
+  if (intersect::scene(scene, ray, hinfo))
   { // scattering
-    return {1.f,1.f,1.f}; // white placeholder
+    // check if path hit a light (emitter material)
+    Material const mat = scene.materials[hinfo.mat];
+    if (std::holds_alternative<emitter>(mat)) 
+      { return std::get<emitter>(mat).radiance; }
+
+    // hit object, perform NEE
+    ℝ3 const ωo = -ray.u.normalized();
+
+    // sample lights in scene: 
+    //   prob = p(li) - prob of choosing light
+    //   val  = pointer to chosen light
+    sample::info<Light const*> si_l;
+    sample::lights(scene.lights, si_l, rng);
+
+    // sample chosen light:
+    //   prob = p(ωi|light)
+    //   val  = ωi
+    //   mult = L(ωi)
+    //   weight = L(ωi)/p(ωi|li)
+    sample::info<ℝ3,linRGB> si_ωi;
+    sample::light(si_l.val, hinfo, scene, si_ωi, rng);
+
+    // evaluate BSDFcosθ for ωi
+    linRGB coef = BxDFcosθ(mat, si_ωi.val, ωo, hinfo.n);
+    return si_ωi.mult * coef / (si_ωi.prob*si_l.prob);
   }
   return {0.f,0.f,0.f}; // scene not hit
 }
+// ****************************************************************************
+
 
 void Renderer::loadScene(std::string fpath)
 {

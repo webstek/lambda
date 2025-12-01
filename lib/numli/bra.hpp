@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file bra.hpp
 /// @author Kyle Webster
-/// @version 0.3
-/// @date 20 Nov 2025
+/// @version 0.5
+/// @date 1 Dec 2025
 /// @brief Numerics Library - Algebra @ref bra
 /// @details
 /// Collection of algebraic structures and algorithms
@@ -184,6 +184,8 @@ template<uint32_t n, arithmetic T = std::float64_t> struct ℝn
   constexpr explicit ℝn( T v ) { for (uint32_t i=0;i<n;i++) elem[i]=v; }
   constexpr explicit ℝn( ℝn<n-1,T> const &x, T v) 
     { for (uint32_t i=0;i<n-1;i++) elem[i]=x.elem[i]; elem[n-1]=v; }
+  constexpr explicit ℝn( ℝn<n+1,T> const &x)
+    { for (uint32_t i=0;i<n;i++) elem[i]=x.elem[i]; }
   constexpr ℝn(std::initializer_list<T> init)
   {
     auto it=init.begin(); 
@@ -275,6 +277,8 @@ struct ℝnxm
 /// @name unary operators
 template<uint32_t n, uint32_t m, arithmetic T>
 constexpr ℝnxm<n,m,T> operator-(ℝnxm<n,m,T> const &x) { return x.negated(); }
+template<uint32_t n, arithmetic T>
+constexpr ℝn<n,T> operator-(ℝn<n,T> const &x) { return x.negated(); }
 
 /// @name binary operators
 template<uint32_t n, arithmetic T>
@@ -351,20 +355,30 @@ constexpr T operator|(ℝn<3,T> const &x, ℝn<3,T> const &y)
 // ************************************
 /// @name functions on ℝn and ℝnxm
 
-/// @brief Subset of column j of length l of matrix A starting at i_min
-template<uint32_t l, uint32_t n, uint32_t m, arithmetic T, uint32_t i_min=0>
-constexpr ℝn<l,T> column(ℝnxm<n,m,T> const &A, uint32_t j)
+/// @brief Subset of column j of length l of matrix A starting at i0
+template<uint32_t l, uint32_t n, uint32_t m, arithmetic T>
+constexpr ℝn<l,T> column(ℝnxm<n,m,T> const &A, uint32_t j, uint32_t i0=0)
 {
-  assert(j<m);
-  assert(i_min<n);
-  assert(l<=n-i_min);
+  assert(j<m); assert(i0<n); assert(l<=n-i0);
   T col[l];
-  for (uint32_t i=i_min;i<i_min+l;i++) { col[i] = A(i,j); }
+  for (uint32_t i=i0;i<i0+l;i++) { col[i] = A(i,j); }
   return ℝn<l,T>(col);
 }
 
 /// @todo row subset
 /// @todo sub matrix
+
+/// @brief Transpose of sub matrix of A of size (l,k) starting at (i,j)
+template<uint32_t l, uint32_t k, uint32_t n, uint32_t m, arithmetic T>
+constexpr ℝnxm<l,k,T> subMatT(ℝnxm<n,m,T> const &A,uint32_t i0=0,uint32_t j0=0)
+{
+  assert(i0<n); assert(j0<m); assert(l<=n-i0); assert(k<=m-j0);
+  T vals[l*k];
+  uint64_t idx=0;
+  for (uint32_t i=0;i<l;i++) for (uint32_t j=0;j<k;j++,idx++)
+    { vals[idx] = A(i0+i,j0+j); }
+  return ℝnxm<l,k,T>(vals);
+}
 
 /// @brief square matrix inverse
 template<uint32_t n, arithmetic T> 
@@ -400,7 +414,6 @@ constexpr ℝnxm<3,3,T> inverse(ℝnxm<3,3,T> const &A)
   vals[6] =  m02 * inv_det;
   vals[7] = -m12 * inv_det;
   vals[8] =  m22 * inv_det;
-  
   return ℝnxm<3,3,T>(vals);
 }
 
@@ -409,7 +422,7 @@ constexpr ℝnxm<3,3,T> inverse(ℝnxm<3,3,T> const &A)
 
 // ************************************
 /// @name aliases
-using ℤ2p  = bra::ℝn<2,uint>;
+using ℤ2p  = bra::ℝn<2,uint64_t>;
 using ℝ2   = bra::ℝn<2,float>;
 using ℝ3   = bra::ℝn<3,float>;
 using ℝ4   = bra::ℝn<4,float>;

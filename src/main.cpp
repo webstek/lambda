@@ -12,9 +12,9 @@ int main(int argc, const char *argv)
 {
   Lambda λ;
   
-  λ.renderer.loadScene("scenes/single-sphere.nls");
+  λ.renderer.loadScene("scenes/sphere-spherelight.nls");
   λ.renderer.render();
-  λ.renderer.saveImage("render/single-sphere.png");
+  λ.renderer.saveImage("render/NEE.png");
   
   return 0;
 }

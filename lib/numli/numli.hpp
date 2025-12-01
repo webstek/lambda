@@ -23,7 +23,7 @@
 /// Contents:
 ///  * @ref compiler - compatibility for MSC and GCC
 ///  * @ref utilities - language utilities
-///  * @ref constants - mathematical constants
+///  * @ref math - basic math constants and functions
 namespace nl
 {
   // **************************************************************************
@@ -39,6 +39,32 @@ namespace nl
   #define restrict
   #endif
   // ** end of compiler *******************************************************
+
+  // **************************************************************************
+  /// @name math
+  /// @brief basic mathematical constants and functions
+
+  // ** constants *********************
+  template<typename T> constexpr T π     = std::numbers::pi_v<T>;
+  template<typename T> constexpr T π²    = 
+    std::numbers::pi_v<T>*std::numbers::pi_v<T>;
+  template<typename T> constexpr T π_2   = std::numbers::pi_v<T>/2;
+  template<typename T> constexpr T inv_π = 1/std::numbers::pi_v<T>; 
+  template<typename T> constexpr T e     = std::numbers::e_v<T>;
+  template<typename T> constexpr T ε     = 
+    std::numeric_limits<T>::epsilon();
+  // **********************************
+
+  
+  // ** functions *********************
+  template<std::totally_ordered T> constexpr T min(T a, T b) {return a<=b?a:b;}
+  template<std::totally_ordered T> constexpr T max(T a, T b) {return a>=b?a:b;}
+  template<std::totally_ordered T> constexpr T clamp(T a, T inf, T sup)
+    { return min(max(inf,a),sup); }
+  template<typename T> constexpr T deg2rad(T deg) {return deg*π<T>/T(180);}
+  template<typename T> constexpr T UB = std::numeric_limits<T>::max();
+  // **********************************
+  // ** end of math ***********************************************************
 
   // **************************************************************************
   /// @name utilities
@@ -70,33 +96,12 @@ namespace nl
   template<class... Fs> Overload(Fs...) -> Overload<Fs...>;
   // **********************************
 
-  // ** min, max, clamp ***************
-  template<std::totally_ordered T> constexpr T min(T a, T b) {return a<=b?a:b;}
-  template<std::totally_ordered T> constexpr T max(T a, T b) {return a>=b?a:b;}
-  template<std::totally_ordered T> constexpr T clamp(T a, T inf, T sup)
-    { return min(max(inf,a),sup); }
-  // **********************************
-
   // ** conversions *******************
   constexpr uint8_t float2byte(float f) 
     { return static_cast<uint8_t>(clamp(int(255*f+0.5f),0,255)); }
-    
+  // **********************************
 
   // ** end of utilities ******************************************************
-
-  // **************************************************************************
-  /// @name constants
-  /// @brief Mathematical and computational constants
-  template<typename T> constexpr T π     = std::numbers::pi_v<T>;
-  template<typename T> constexpr T π²    = 
-    std::numbers::pi_v<T>*std::numbers::pi_v<T>;
-  template<typename T> constexpr T π_2   = std::numbers::pi_v<T>/2;
-  template<typename T> constexpr T inv_π = 1/std::numbers::pi_v<T>; 
-  template<typename T> constexpr T e     = std::numbers::e_v<T>;
-  template<typename T> constexpr T ε     = 
-    std::numeric_limits<T>::epsilon();
-  template<typename T> constexpr T radians(T deg) {return deg*π<T>/T(180);}
-  // ** end of constants ******************************************************
 } // ** end of namespace nl ***********
 
 // ****************************************************************************
