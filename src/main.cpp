@@ -8,13 +8,13 @@
 #include "lambda.hpp"
 // ************************************
 
-int main(int argc, const char *argv)
+int main(int argc, char *argv)
 {
   Lambda λ;
   
-  λ.renderer.loadScene("scenes/sphere-spherelight.nls");
+  λ.renderer.loadScene("scenes/box.nls");
   λ.renderer.render();
-  λ.renderer.saveImage("render/NEE.png");
+  λ.renderer.saveImage("render/box.png");
   
   return 0;
 }

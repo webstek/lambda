@@ -24,7 +24,7 @@ void Renderer::render()
     nl::ℝ2 uv = {float(j+.5f),float(i+.5f)};
     sample::camera(scene.cam, uv, si, rng);
     linRGB radiance = tracePath(si.val, rng);
-    image.data[px_idx] = sRGB2rgb24(linRGB2sRGB(radiance));
+    image.data[(h-i-1)*w+j] = sRGB2rgb24(linRGB2sRGB(radiance));
   }
 }
 // ****************************************************************************

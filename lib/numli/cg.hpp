@@ -548,7 +548,7 @@ struct scene
 namespace intersect
 { // ** nl::cg::intersect *****************************************************
 
-constexpr float BIAS = ε<float>;
+constexpr float BIAS = 1e3*ε<float>;
 
 /// @brief Sphere-Ray intersection
 /// @param s sphere to intersect
@@ -827,6 +827,7 @@ inline void loadLights(
       spherelight light;
       light.name=name;
       loadSphereLight(light, j_light, scene.materials);
+      light._sphere.obj = scene.objects.size();
       scene.objects.emplace_back(std::in_place_type<sphere>,light._sphere);
       scene.lights.emplace_back(std::in_place_type<spherelight>,light);
       break;
