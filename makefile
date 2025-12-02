@@ -4,8 +4,9 @@
 
 CXX := g++
 CXXFLAGS := -std=c++23 -Wall -Wextra
-DEBUG_FLAGS := -g -DDEBUG -Wno-deprecated-literal-operator
-RELEASE_FLAGS := -O3
+DEBUG_FLAGS := -g -DDEBUG -fopenmp
+RELEASE_FLAGS := -O3 -fopenmp
+SUPPRESS_FLAGS := -Wno-deprecated-literal-operator
 
 SRC_DIR := src
 INCLUDE_DIR := include
@@ -30,10 +31,10 @@ TARGET := $(BIN_DIR)/lambda
 
 all: debug
 
-debug: CXXFLAGS += $(DEBUG_FLAGS)
+debug: CXXFLAGS += $(DEBUG_FLAGS) $(SUPPRESS_FLAGS)
 debug: $(TARGET)
 
-release: CXXFLAGS += $(RELEASE_FLAGS)
+release: CXXFLAGS += $(RELEASE_FLAGS) $(SUPPRESS_FLAGS)
 release: $(TARGET)
 
 # Build the executable

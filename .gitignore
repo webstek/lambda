@@ -44,7 +44,7 @@
 .vscode
 
 # performance data
-*.data
+*.data*
 
 # executable
 bin/lambda

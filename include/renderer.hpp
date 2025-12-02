@@ -8,6 +8,7 @@
 #pragma once
 // ** Includes ************************
 #include <string>
+#include <omp.h>
 #include "LodePNG/lodepng.h"
 #include "cg.hpp"
 // ************************************

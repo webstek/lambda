@@ -16,19 +16,19 @@ void Renderer::render()
   const uint64_t w = scene.cam.width; const uint64_t h = scene.cam.height;
   image.init(w,h);
 
-  uint64_t px_idx = 0;
-  for (uint64_t i=0; i<h; i++) for (uint64_t j=0; j<w; j++, px_idx++)
+  #pragma omp parallel for collapse(2) schedule(runtime)
+  for (uint64_t i=0; i<h; i++) for (uint64_t j=0; j<w; j++)
   {
-    nl::RNG rng(px_idx);
+    nl::RNG rng(i*w+j);
     linRGB radiance = 0.f;
-    for (int k=0; k<4; k++)
+    for (int k=0; k<128; k++)
     { // multiple samples per pixel
       sample::info<ray> si;
       nl::ℝ2 uv = {float(j+rng.flt()), float(i+rng.flt())};
       sample::camera(scene.cam, uv, si, rng);
       radiance += tracePath(si.val, rng);
     }
-    radiance /= 4.f;
+    radiance /= 128.f;
     image.data[(h-i-1)*w+j] = sRGB2rgb24(linRGB2sRGB(radiance));
   }
 }
