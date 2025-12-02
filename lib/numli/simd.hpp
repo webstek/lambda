@@ -44,6 +44,7 @@ namespace simd
     constexpr std::size_t SIMD_WIDTH = 0;
   #endif
 
+  #define TARGET_AVX2 __attribute__((target("avx2")))
   // **********************************
   /// @struct simd
   /// @brief simd information
@@ -80,7 +81,7 @@ namespace simd
   ///  * @ref div_avx2_float
 
   /// @brief avx2 float array add
-  __attribute__((target("avx2"))) inline void add_avx2_float(
+  TARGET_AVX2 inline void add_avx2_float(
     float       * restrict x,
     float const * restrict a,
     float const * restrict b,
@@ -97,7 +98,7 @@ namespace simd
     for (size_t j=n-n%l; j<n; j++) { x[j] = a[j]+b[j]; }
   }
   /// @brief avx2 double array add
-  __attribute__((target("avx2"))) inline void add_avx2_double(
+  TARGET_AVX2 inline void add_avx2_double(
     double       * restrict x,
     double const * restrict a,
     double const * restrict b,
@@ -114,7 +115,7 @@ namespace simd
     for (size_t j=n-n%l; j<n; j++) { x[j] = a[j]+b[j]; }
   }
   /// @brief avx2 float array minus
-  __attribute__((target("avx2"))) inline void sub_avx2_float(
+  TARGET_AVX2 inline void sub_avx2_float(
     float       * restrict x,
     float const * restrict a,
     float const * restrict b,
@@ -131,7 +132,7 @@ namespace simd
     for (size_t j=n-n%l; j<n; j++) { x[j] = a[j]-b[j]; }
   }
   /// @brief avx2 float array multiply
-  __attribute__((target("avx2"))) inline void mul_avx2_float(
+  TARGET_AVX2 inline void mul_avx2_float(
     float       * restrict x,
     float const * restrict a,
     float const * restrict b,
@@ -148,7 +149,7 @@ namespace simd
     for (size_t j=n-n%l; j<n; j++) { x[j] = a[j]*b[j]; }
   }
   /// @brief avx2 float array divide
-  __attribute__((target("avx2"))) inline void div_avx2_float(
+  TARGET_AVX2 inline void div_avx2_float(
     float       * restrict x,
     float const * restrict a,
     float const * restrict b,
