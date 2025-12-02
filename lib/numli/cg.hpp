@@ -106,7 +106,13 @@ template<bra::arithmetic T>
 constexpr rgb<T> operator*(rgb<T> const &C1, rgb<T> const &C2) 
   { return rgb<T>(C1.c*C2.c); }
 template<bra::arithmetic T> 
-constexpr rgb<T> operator/(rgb<T> const &C, float s) {return rgb<T>(C.c*(1/s));}
+constexpr rgb<T> operator/(rgb<T> const &C,float s) {return rgb<T>(C.c*(1/s));}
+template<bra::arithmetic T>
+constexpr rgb<T>& operator+=(rgb<T> &C1, rgb<T> const &C2) 
+  { C1.c[0]+=C2.c[0]; C1.c[1]+=C2.c[1]; C1.c[2]+=C2.c[2]; return C1; }
+template<bra::arithmetic T>
+constexpr rgb<T>& operator/=(rgb<T> &C1, float s)
+  { C1.c[0]/=s; C1.c[1]/=s; C1.c[2]/=s; return C1; }
 
 /// @name colour representations
 using rgb24  = rgb<uint8_t>;

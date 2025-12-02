@@ -20,10 +20,15 @@ void Renderer::render()
   for (uint64_t i=0; i<h; i++) for (uint64_t j=0; j<w; j++, px_idx++)
   {
     nl::RNG rng(px_idx);
-    sample::info<ray> si;
-    nl::ℝ2 uv = {float(j+.5f),float(i+.5f)};
-    sample::camera(scene.cam, uv, si, rng);
-    linRGB radiance = tracePath(si.val, rng);
+    linRGB radiance = 0.f;
+    for (int k=0; k<4; k++)
+    { // multiple samples per pixel
+      sample::info<ray> si;
+      nl::ℝ2 uv = {float(j+rng.flt()), float(i+rng.flt())};
+      sample::camera(scene.cam, uv, si, rng);
+      radiance += tracePath(si.val, rng);
+    }
+    radiance /= 4.f;
     image.data[(h-i-1)*w+j] = sRGB2rgb24(linRGB2sRGB(radiance));
   }
 }

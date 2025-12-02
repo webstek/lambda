@@ -43,6 +43,9 @@
 # .vscode folder
 .vscode
 
+# performance data
+*.data
+
 # executable
 bin/lambda
 
