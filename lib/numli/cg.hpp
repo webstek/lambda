@@ -836,7 +836,7 @@ inline bool blinni(
     info.prob = p*b.fdSampleProb(dir[2]);
     info.val = i;
     info.mult = b.fdcosθ(dir[2]);
-    info.weight = b.Kd;
+    info.weight = b.Kd/p;
     return true;
   } else if (lobe<pp_d+pp_r)
   { // reflection lobe sample

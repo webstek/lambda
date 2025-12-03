@@ -10,7 +10,8 @@
 using namespace nl::cg;
 using ℝ3 = nl::ℝ3;
 // ************************************
-constexpr uint64_t SPP  = 2048;
+constexpr uint64_t MAX_SCATTERINGS = 64;
+constexpr uint64_t SPP   = 512;
 constexpr float SAMPLE_P = 0.9;
 // ************************************
 
@@ -60,7 +61,7 @@ linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, int scatters) const
       { return std::get<emitter>(mat).radiance; }
 
     // hit an object, scatter if less than max scattering
-    if (scatters > 64) return {0.f,0.f,0.f};
+    if (scatters > MAX_SCATTERINGS) return {0.f,0.f,0.f};
     ℝ3 const o = -r.u.normalized();
 
     // ** Light IS estimate *******************************
