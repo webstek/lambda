@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file bra.hpp
 /// @author Kyle Webster
-/// @version 0.5
-/// @date 1 Dec 2025
+/// @version 0.7
+/// @date 3 Dec 2025
 /// @brief Numerics Library - Algebra @ref bra
 /// @details
 /// Collection of algebraic structures and algorithms
@@ -348,7 +348,11 @@ constexpr ℝn<3,T> operator^(ℝn<3,T> const &x, ℝn<3,T> const &y)
 template<arithmetic T>
 constexpr T operator|(ℝn<3,T> const &x, ℝn<3,T> const &y)
   { return x[0]*y[0]+x[1]*y[1]+x[2]*y[2]; }
-
+/// @brief reflection about vector in ℝ3
+/// @warning ASSUMES axis is a unit vector
+template<arithmetic T>
+constexpr ℝn<3,T> reflect(ℝn<3,T> const &x, ℝn<3,T> const &axis)
+  { return -x+2*(x|axis)*axis; }
 
 // ** end operators on ℝn and ℝnxm ****
 

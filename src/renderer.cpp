@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file renderer.cpp
 /// @author Kyle Webster
-/// @version 0.1
-/// @date 30 Nov 2025
+/// @version 0.4
+/// @date 3 Dec 2025
 /// @brief Renderer implementation
 // ****************************************************************************
 #include "renderer.hpp"
@@ -10,7 +10,7 @@
 using namespace nl::cg;
 using ℝ3 = nl::ℝ3;
 // ************************************
-constexpr uint64_t SPP  = 1024;
+constexpr uint64_t SPP  = 2048;
 constexpr float SAMPLE_P = 0.9;
 // ************************************
 
@@ -79,7 +79,7 @@ linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, int scatters) const
     sample::light(si_l.val, hinfo, scene, si_i_L, rng);
 
     // evaluate BSDFcosθ for ωi
-    linRGB const coef = BxDFcosθ(mat, si_i_L.val, o, hinfo.n);
+    linRGB const coef = BxDFcosθ(mat, si_i_L.val, o, hinfo.F.z);
 
     // Light IS estimate
     linRGB const L_IS = si_i_L.mult * coef / (si_i_L.prob*si_l.prob);
@@ -112,7 +112,7 @@ linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, int scatters) const
     // ** MIS estimate ************************************
     float const p_L_mati = sample::probForLight(si_l.val, i_ray)*si_l.prob;
     float const p_mat_Li = 
-      sample::probForMateriali(&mat, hinfo, si_i_L.val, SAMPLE_P);
+      sample::probForMateriali(&mat, hinfo, si_i_L.val, o, SAMPLE_P);
 
     // power heuristic weights, β=2
     float const p_L_i = si_i_L.prob*si_l.prob;

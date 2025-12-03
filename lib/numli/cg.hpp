@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file cg.hpp
 /// @author Kyle Webster
-/// @version 0.4
-/// @date 1 Dec 2025
+/// @version 0.8
+/// @date 3 Dec 2025
 /// @brief Numerics Library - Computer Graphics - @ref cg
 /// @details
 /// Collection of computer graphics structures and algorithms
@@ -192,6 +192,7 @@ struct basis
   ℝ3 x, y, z;
   basis() = default;
   basis(ℝ3 const &e0, ℝ3 const &e1, ℝ3 const &e2) : x(e0), y(e1), z(e2) {}
+  constexpr ℝ3 toBasis(ℝ3 const &v) const { return v[0]*x+v[1]*y+v[2]*z; }
 };
 
 /// @brief returns an orthonormal basis with the e0^e1 = e2 = v.normalized()
@@ -436,14 +437,23 @@ struct lambertian : item
 };
 struct blinn : item
 {
-  linRGB Kd, Ks, Kt, Le, reflect, transmit;
+  linRGB Kd, Ks, Kt, Le;
   float α, ior;
+  float p_d, p_r;
+  constexpr void calcLobeProbs() 
+    { p_d=Kd.luma(); p_r=Ks.luma(); float tot=p_d+p_r; p_d/=tot; p_r/=tot; }
+  constexpr linRGB fdcosθ(float cos_i) const { return Kd*inv_π<float>*cos_i; }
+  constexpr linRGB frcosθ(float cos_h) const
+    { return Ks*(α+2)*.125f*inv_π<float>*std::pow(cos_h,α); }
   constexpr linRGB BSDFcosθ(ℝ3 const &i, ℝ3 const &o, ℝ3 const &n) const 
   { 
-    return Kd*inv_π<float>*max(i|n,0.f) 
-      + Ks*(α+2)*0.125f*inv_π<float>*std::pow(n|(i+o).normalized(),α)
-      + Kt*(α+2)*0.125f*inv_π<float>*std::pow(n|-(ior*i+o).normalized(),α); 
+    return fdcosθ(max(i|n,0.f)) + frcosθ((i+o).normalized()|n);
+      //+ Kt*(α+2)*0.125f*inv_π<float>*std::pow(n|-(ior*i+o).normalized(),α); 
   }
+  constexpr float fdSampleProb(float cos_i) const 
+    { return p_d*cos_i*inv_π<float>; }
+  constexpr float frSampleProb(float cos_h) const 
+    { return p_r*std::pow(cos_h,α+1)*(α+1)*.5f*inv_π<float>*.25f; }
 };
 struct microfacet : item
 {
@@ -507,8 +517,7 @@ struct hitinfo
 {
   float z = UB<float>;
   ℝ3 p;
-  ℝ3 n;
-  ℝ3 tangent;
+  basis F; ///< coordinate frame at hit point
   bool front;
   materialidx mat;
   objectidx obj;
@@ -561,12 +570,13 @@ constexpr float BIAS = 1e3*ε<float>;
 constexpr bool sphere(cg::sphere const &s, ray const &w_ray, hitinfo &hinfo)
 { 
   // convert ray to local space
-  ray const l_ray = s.T.toLocal(w_ray);
+  ℝ3 const pos = s.T.pos();
+  ℝ3 const d = w_ray.p-pos;
 
   // descriminant of ray-sphere intersection equation
-  float const a = l_ray.u|l_ray.u;
-  float const b = 2*(l_ray.p|l_ray.u);
-  float const c = (l_ray.p|l_ray.p)-1.f;
+  float const a = w_ray.u|w_ray.u;
+  float const b = 2*(d|w_ray.u);
+  float const c = (d|d)-s.size*s.size;
   float const Δ = b*b - 4*a*c;
   if (Δ < BIAS) [[likely]] { return false; }
 
@@ -580,20 +590,25 @@ constexpr bool sphere(cg::sphere const &s, ray const &w_ray, hitinfo &hinfo)
   if (hinfo.z < t) [[unlikely]] { return false; } // check for closest hit
 
   // ray hits
-  ℝ3   const p = l_ray.p+t*l_ray.u;
-  ℝ3   const n(p);
-  bool const front = (n|l_ray.u) < 0.f;
+  ℝ3   const p = w_ray.p+t*w_ray.u;
+  ℝ3   const n = (p-pos).normalized();
+  bool const front = (n|w_ray.u) < 0.f;
 
   // (θ,φ) parameterization for tangent (and bitangent)
-  float const sinθ = std::sqrtf(1.f-p[2]*p[2]);
-  float const φ = atan2f32(p[1],p[0]);
-  ℝ3 const t_vec = {-sinθ*sinf(φ),sinθ*cosf(φ),0.f};
+  float const cosθ = n[2];
+  float const sinθ = std::sqrtf(1.f-cosθ*cosθ);
+  float const φ = atan2f32(n[1],n[0]);
+  float const cosφ = cosf(φ);
+  float const sinφ = sinf(φ);
+  ℝ3 const t_vec = {-sinθ*sinφ,sinθ*cosφ,0.f};
+  ℝ3 const b_vec = {cosθ*cosφ,cosθ*sinφ,-sinθ};
 
   // populate hinfo in world space
   hinfo.z = t;
-  hinfo.p = s.T.toWorld(pnt(p));
-  hinfo.n = s.T.toWorld(normal(n)).normalized();
-  hinfo.tangent = s.T.toWorld(vec(t_vec)).normalized();
+  hinfo.p = p;
+  hinfo.F.x = t_vec;
+  hinfo.F.y = b_vec;
+  hinfo.F.z = n;
   hinfo.front = front;
   hinfo.mat = s.mat;
   hinfo.obj = s.obj;
@@ -613,8 +628,9 @@ constexpr bool plane(cg::plane const &p, ray const &w_ray, hitinfo &hinfo)
   // populate hinfo in world space
   hinfo.z = t;
   hinfo.p = p.T.toWorld(pnt(x));
-  hinfo.n = p.T.toWorld(normal({0.f,0.f,1.f})).normalized();
-  hinfo.tangent = p.T.toWorld(vec({0.f,1.f,0.f})).normalized();
+  hinfo.F.z = p.T.toWorld(normal({0.f,0.f,1.f})).normalized();
+  hinfo.F.x = p.T.toWorld(vec({0.f,1.f,0.f})).normalized();
+  hinfo.F.y = hinfo.F.z^hinfo.F.x;
   hinfo.front = l_ray.u[2]<0.f;
   hinfo.mat = p.mat;
   hinfo.obj = p.obj;
@@ -775,58 +791,80 @@ inline bool lambertiani(
   if (ξ>p) { return false; }
 
   // generate outgoing direction and fill probability
-  basis const base(hinfo.tangent^hinfo.n, hinfo.tangent, hinfo.n);
   ℝ3 const dir = stoch::CosHemi(rng.flt(),rng.flt());
-  ℝ3 const i   = dir[0]*base.x + dir[1]*base.y + dir[2]*base.z;
+  ℝ3 const i   = hinfo.F.toBasis(dir);
   info.prob = p*dir[2]/π<float>;
   info.val = i;
 
   // evaluate BRDFcosθ
-  info.mult = mat.BRDFcosθ(i, hinfo.n);
+  info.mult = mat.BRDFcosθ(i, hinfo.F.z);
   info.weight = mat.albedo;
   return true;
 }
 /// @brief probability of lambertian generating the sample direction
-inline float probForLambertian(
-  lambertian const &l, hitinfo const &hinfo, ℝ3 const &i, float p)
-  { return p * hinfo.n|i * inv_π<float>; }
+inline float probForLambertian(hitinfo const &hinfo, ℝ3 const &i, float p)
+  { return p * nl::max(hinfo.F.z|i,0.f) * inv_π<float>; }
 
+/// @brief Blinn half-vector sample
+constexpr ℝ3 blinnh(float α, float x0, float x1)
+{
+  float const cosθ = std::pow(1.f-x0, 1.f/(α+1.f));
+  float const sinθ = std::sqrtf(1.f-cosθ*cosθ);
+  const float φ    = 2.f*π<float>*x1;
+  return {sinθ*cosf(φ), sinθ*sinf(φ), cosθ};
+}
 
 /// @brief samples blinn material for an incoming direction
 inline bool blinni(
   cg::blinn const &b, 
-  hitinfo const &hinfo, 
+  hitinfo const &hinfo,
+  ℝ3 const &o,
   info<ℝ3,linRGB> &info, 
   RNG &rng, 
   float p)
 {
   float const lobe = rng.flt();
   if (lobe>=p) { return false; }
+  
+  float const pp_d = p*b.p_d;
+  float const pp_r = p*b.p_r;
 
-  float p_d = b.Kd.luma();
-  float p_r = b.Ks.luma();
-  float const inv_tot = 1.f/(p_d+p_r);
-  p_d *= p*inv_tot;
-  p_r *= p*inv_tot;
-
-  if (lobe<p_d)
+  if (lobe<pp_d)
   { // diffuse lobe sample
-
-  } else if (lobe<p_d+p_r)
+    ℝ3 const dir = stoch::CosHemi(rng.flt(), rng.flt());
+    ℝ3 const i = hinfo.F.toBasis(dir);
+    info.prob = p*b.fdSampleProb(dir[2]);
+    info.val = i;
+    info.mult = b.fdcosθ(dir[2]);
+    info.weight = b.Kd;
+    return true;
+  } else if (lobe<pp_d+pp_r)
   { // reflection lobe sample
-
+    ℝ3 const ω = blinnh(b.α,rng.flt(),rng.flt());
+    ℝ3 const h = hinfo.F.toBasis(ω);
+    ℝ3 const i = bra::reflect(o,h);
+    // p(lobe)p(h|lobe)p(i|h)
+    info.prob = p*b.frSampleProb(ω[2]);
+    info.val  = i;
+    info.mult = b.frcosθ(ω[2]);
+    // frcosθ/p(i)
+    info.weight = b.Ks*(b.α+2)/(pp_r*ω[2]*(b.α+1));
+    return true;
   }
-
   return false;
 }
 /// @brief probability of blinn generating the sample direction
 inline float probForBlinn(
   blinn const &b, 
   hitinfo const &hinfo, 
+  ℝ3 const &o,
   ℝ3 const &i, 
   float p)
 {
-  return 0.f;
+  // p(i) = p*(p_d*p(i|p_d)+p_r*p(i|p_r))
+  float const cos_i = nl::max(i|hinfo.F.z,0.f);
+  ℝ3 const h = (i+o).normalized();
+  return p*(b.fdSampleProb(cos_i)+b.frSampleProb(h|hinfo.F.z));
 }
 
 
@@ -841,18 +879,18 @@ constexpr bool materiali(
 {
   return std::visit(Overload{
       [&](cg::lambertian const &l){return lambertiani(l,hinfo,info,rng,p);},
-      [&](cg::blinn const &b){return blinni(b,hinfo,info,rng,p);},
+      [&](cg::blinn const &b){return blinni(b,hinfo,o,info,rng,p);},
       [](auto const &){return false;}
     }, *mat);
 }
 
 /// @brief material sample evaluation dispatch 
 constexpr float probForMateriali(
-  Material const *mat, hitinfo const &hinfo, ℝ3 const &i, float p)
+  Material const *mat, hitinfo const &hinfo, ℝ3 const &i, ℝ3 const &o, float p)
 {
   return std::visit(Overload{
-      [&](cg::lambertian const &l){return probForLambertian(l,hinfo,i,p);},
-      [&](cg::blinn const &m){return probForBlinn(m,hinfo,i,p);},
+      [&](cg::lambertian const &){return probForLambertian(hinfo,i,p);},
+      [&](cg::blinn const &m){return probForBlinn(m,hinfo,i,o,p);},
       [](auto const&){return 0.f;}
     }, *mat);
 }
@@ -1081,10 +1119,9 @@ inline void loadBlinn(blinn &m, json const &j)
   m.Ks = Ks;
   m.Kt = Kt;
   m.Le = Le;
-  m.reflect = reflect;
-  m.transmit = transmit;
   m.α = alpha;
   m.ior = ior;
+  m.calcLobeProbs();
 }
 /// @todo
 inline void loadMicrofacet(microfacet &m, json const &j) {(void)m; (void)j;}
