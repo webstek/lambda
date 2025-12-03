@@ -1,35 +1,100 @@
 {
-  "camera": {
-    "pos": [0, -10, 3],
-    "look_at": [0, 0, 0],
-    "up": [0, 0, 1],
-    "fov": 50,
-    "ar": 1.778,
-    "width": 1280},
-  "lights": [{
-    "name": "sphere_light", 
-    "type": "sphere", 
-    "transform": {"scale": [0.3, 0.3, 0.3], "translate": [1,-1,3]},
-    "radiance": [200,190,170]}],
-  "objects": [
-    {
-      "name":"sphere1", 
-      "type":"sphere", 
-      "transform": {},
-      "material": "diffuse"},
-    {
-      "name":"bottom",
-      "type":"plane",
-      "transform": {"translate": [0,0,-1], "scale": [8,8,1]},
-      "material": "gray"},
-    {
-      "name":"backdrop",
-      "type":"plane",
-      "transform": {"scale": [8,8,1],
-                    "rotate": {"axis":[1,0,0], "degrees": 90},
-                    "translate": [0,8,7]},
-      "material": "gray"}],
-  "materials": [
-    {"name":"diffuse", "type":"lambertian", "albedo":[0,1,1]},
-    {"name":"gray", "type":"lambertian", "albedo":[0.65,0.63,0.6]}]
+"camera": {
+  "pos": [0, -60, 12],
+  "look_at": [0, 0, 12],
+  "up": [0, 0, 1],
+  "fov": 30,
+  "ar": 1.778,
+  "width": 1280},
+"lights": [
+  {
+    "name": "sphere-light",
+    "type": "sphere",
+    "transform": {"translate": [0,0,18]},
+    "radiance": [159,159,159]}],
+"objects": [
+  {
+    "name": "sphere1",
+    "type": "sphere",
+    "transform": {"scale": [6,6,6], "translate": [0,4,6]},
+    "material": "white"},
+  {
+    "name": "sphere2",
+    "type": "sphere",
+    "transform": {"scale": [5,5,5], "translate": [9,-3,5]},
+    "material": "cyan"},
+  {
+    "name": "sphere3",
+    "type": "sphere",
+    "transform": {"scale": [5,5,5], "translate": [-9,-3,5]},
+    "material": "gray"},
+  {
+    "name": "wall-top",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1],
+                  "translate": [0,0,24],
+                  "rotate": {"axis":[1,0,0], "degrees": 180}},
+    "material": "wall-grey"},
+  {
+    "name": "wall-bot",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1]},
+    "material": "wall-grey"},
+  {
+    "name": "wall-back",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1], 
+                  "rotate": {"axis": [1,0,0], "degrees": 90}, 
+                  "translate": [0,20,12]},
+    "material": "wall-grey"},
+  {
+    "name": "wall-left",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1], 
+                  "rotate": {"axis": [0,1,0], "degrees": 90}, 
+                  "translate": [-15,0,12]},
+    "material": "red"},
+  {
+    "name": "wall-back",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1], 
+                  "rotate": {"axis": [0,1,0], "degrees": -90}, 
+                  "translate": [15,0,12]},
+    "material": "blue"}],
+"materials": [
+  {
+    "name": "wall-grey",
+    "type": "lambertian",
+    "albedo": [0.7, 0.7, 0.7]},
+  {
+    "name": "wall-red",
+    "type": "lambertian",
+    "albedo": [0.7, 0.14, 0.14]},
+  {
+    "name": "wall-green",
+    "type": "lambertian",
+    "albedo": [0.14, 0.7, 0.14]},
+  {
+    "name": "reflective",
+    "type": "blinn",
+    "Ks": [0.9, 0.9, 0.9],
+    "glossiness": 128,
+    "reflect": [0.9, 0.9, 0.9]},
+  {
+    "name": "refractive",
+    "type": "blinn",
+    "glossiness": 1024,
+    "transmit": [0.9, 0.9, 0.9],
+    "ior": 1.52},
+  {
+    "name": "smooth",
+    "type": "blinn",
+    "Kd": [0.7, 0.7, 0.7],
+    "Ks": [0.3, 0.3, 0.3],
+    "glossiness": 64},
+  {"name":"red",   "type":"lambertian", "albedo":[0.70,0.00,0.00]},
+  {"name":"blue",  "type":"lambertian", "albedo":[0.00,0.15,0.70]},
+  {"name":"cyan",  "type":"lambertian", "albedo":[0.15,0.50,0.60]},
+  {"name":"white", "type":"lambertian", "albedo":[1.00,1.00,1.00]},
+  {"name":"gray",  "type":"lambertian", "albedo":[0.65,0.63,0.60]}]
 }

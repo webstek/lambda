@@ -96,8 +96,12 @@ template <bra::arithmetic T> struct rgb
   constexpr rgb& operator=(T v) {c[0]=v; c[1]=v; c[2]=v; return *this;}
   constexpr std::string toString()
     {return std::to_string(c[0])+std::to_string(c[1])+std::to_string(c[2]);}
+  constexpr float luma() const {return 0.2126f*c[0]+0.7152f*c[1]+0.0722f*c[2];}
 };
 
+template<bra::arithmetic T>
+constexpr rgb<T> operator+(rgb<T> const &C1, rgb<T> const &C2) 
+  { return rgb<T>(C1.c+C2.c); }
 template<bra::arithmetic T> 
 constexpr rgb<T> operator*(rgb<T> const &C, float s) {return rgb<T>(C.c*s);}
 template<bra::arithmetic T> 
@@ -347,6 +351,7 @@ constexpr ObjectType str2obj(std::string s)
 
 struct sphere : item
 {
+  float size;
   transform   T;
   materialidx mat;
   objectidx   obj;
@@ -430,9 +435,12 @@ struct blinn : item
 {
   linRGB Kd, Ks, Kt, Le, reflect, transmit;
   float α, ior;
-  /// @todo add specular lobe
   constexpr linRGB BSDFcosθ(ℝ3 const &i, ℝ3 const &o, ℝ3 const &n) const 
-    { return Kd*inv_π<float>*max(i|n,0.f); }
+  { 
+    return Kd*inv_π<float>*max(i|n,0.f) 
+      + Ks*(α+2)*0.125f*inv_π<float>*std::pow(n|(i+o).normalized(),α)
+      + Kt*(α+2)*0.125f*inv_π<float>*std::pow(n|-(ior*i+o).normalized(),α); 
+  }
 };
 struct microfacet : item
 {
@@ -664,6 +672,9 @@ inline void camera(cg::camera const &c, ℝ2 const &uv, info<ray> &info, RNG &rn
   info.val = {worldkl, (worldij-worldkl).normalized()};
 }
 
+// ************************************
+/// @name light sampling
+
 /// @brief uniform random light from a scene
 inline void lights(
   list<Light> const &lights, 
@@ -687,10 +698,8 @@ inline void spherelight(
   // compute probability for ωi
   ℝ3 const L = sl._sphere.T.pos()-hinfo.p;
   float const dist2 = L|L;
-  float const size = bra::column<3>(sl._sphere.T.M,0).l2();
-  float const sr = (1.f-std::sqrtf(1.f-size*size/dist2));
-  float const Ω = 2*π<float>*sr;
-  info.prob = 1.f/Ω;
+  float const sr = (1.f-std::sqrtf(1.f-sl._sphere.size*sl._sphere.size/dist2));
+  info.prob = 0.5f/(π<float>*sr);
 
   // sample direction in projection of sphere light onto sphere
   basis const base = orthonormalBasisOf(L);
@@ -707,6 +716,18 @@ inline void spherelight(
     intersect::scene(sc,{hinfo.p, ωi},temp,sl._sphere.obj) ? 0.f : 1.f;
   info.mult = sl.radiance*shadowing;
 }
+/// @brief probability that a ray (direction from a hit point) could be sampled
+inline float probForSphereLight(cg::spherelight const &l, ray const &r)
+{
+  // compute probability if ray intersects
+  ℝ3 const L = l._sphere.T.pos()-r.p;
+  float const dist2 = L|L;
+  float const sr = (1.f-std::sqrtf(1.f-l._sphere.size*l._sphere.size/dist2));
+  float const prob = .5f/(π<float>*sr);
+
+  hitinfo unused;
+  return intersect::sphere(l._sphere, r, unused) ? prob : 0.f;
+}
 
 /// @brief light sampling dispatch
 constexpr void light(
@@ -721,6 +742,91 @@ constexpr void light(
     [](auto const &){}
   }, *l);
 }
+
+/// @brief probability of a light generating a direction as a sample
+constexpr float probForLight(
+  Light const *l,
+  ray const &r)
+{
+  return std::visit(Overload{
+      [&](cg::spherelight const &sl){return probForSphereLight(sl,r);},
+      [](auto const &){return 0.f;}
+    }, *l);
+}
+// ** end of light sampling ***********
+
+
+// ************************************
+/// @name material sampling
+
+/// @brief cosine weighted sample of lambertian brdf
+inline bool lambertiani(
+  cg::lambertian const &mat,
+  hitinfo const &hinfo,
+  info<ℝ3,linRGB> &info,
+  RNG &rng)
+{
+  // russian roulette chance
+  float const p = rng.flt();
+  if (p>mat.albedo.luma()) { return false; }
+
+  // generate outgoing direction and fill probability
+  basis const base(hinfo.tangent^hinfo.n, hinfo.tangent, hinfo.n);
+  ℝ3 const dir = stoch::CosHemi(rng.flt(),rng.flt());
+  ℝ3 const i   = dir[0]*base.x + dir[1]*base.y + dir[2]*base.z;
+  info.prob = p*dir[2]/π<float>;
+  info.val = i;
+
+  // evaluate BRDFcosθ
+  info.mult = mat.BRDFcosθ(i, hinfo.n);
+  info.weight = mat.albedo;
+  return true;
+}
+/// @brief probability of lambertian generating the sample direction
+inline float probForLambertian(
+  lambertian const &l, hitinfo const &hinfo, ℝ3 const &i)
+  { return hinfo.n|i * inv_π<float>; }
+
+
+/// @brief samples blinn material for an incoming direction
+inline bool blinni(
+  cg::blinn const &mat, hitinfo const &hinfo, info<ℝ3,linRGB> &info, RNG &rng)
+{
+  return false;
+}
+/// @brief probability of blinn generating the sample direction
+inline float probForBlinn(blinn const &mat, hitinfo const &hinfo, ℝ3 const &i)
+{
+  return 0.f;
+}
+
+
+/// @brief material incoming light direction sampling dispatch
+constexpr bool materiali(
+  Material const *mat,
+  hitinfo const &hinfo,
+  ℝ3 const &o,
+  info<ℝ3,linRGB> &info,
+  RNG &rng)
+{
+  return std::visit(Overload{
+      [&](cg::lambertian const &mat){return lambertiani(mat,hinfo,info,rng);},
+      [&](cg::blinn const &mat){return blinni(mat,hinfo,info,rng);},
+      [](auto const &){return false;}
+    }, *mat);
+}
+
+/// @brief material sample evaluation dispatch 
+constexpr float probForMateriali(
+  Material const *mat, hitinfo const &hinfo, ℝ3 const &i)
+{
+  return std::visit(Overload{
+      [&](cg::lambertian const &l){return probForLambertian(l,hinfo,i);},
+      [&](cg::blinn const &m){return probForBlinn(m,hinfo,i);},
+      [](auto const&){return 0.f;}
+    }, *mat);
+}
+// ** end of material sampling ********
 
 } // ** end of namespace sample ***********************************************
 
@@ -803,6 +909,7 @@ inline void loadSphereLight(
   linRGB radiance;
   loadℝ3(radiance.c, j.at("radiance"));
   loadTransform(s.T, j.at("transform"));
+  s.size = bra::column<3>(s.T.M,0).l2();
   std::string name = "emitter_"+radiance.toString();
   materialidx mat = mats.idxOf(name);
   if (mat==mats.size()) 
@@ -862,6 +969,12 @@ inline void loadSphere(sphere &s, json const &j, list<Material> const &mats)
   transform T;
   loadTransform(T, j.at("transform"));
   s.T = T;
+  float const sx = bra::column<3>(T.M,0).l2();
+  float const sy = bra::column<3>(T.M,1).l2();
+  float const sz = bra::column<3>(T.M,2).l2();
+  assert(std::abs(sx-sy)<0.01);
+  assert(std::abs(sx-sz)<0.01); // check for uniform scaling
+  s.size = sx;
   s.mat = mats.idxOf(j.at("material").get<std::string>());
 }
 inline void loadPlane(plane &p, json const &j, list<Material> const &mats) 
