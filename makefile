@@ -5,8 +5,8 @@
 CXX := g++
 CXXFLAGS := -std=c++23 -Wall -Wextra
 DEBUG_FLAGS := -g -DDEBUG -fopenmp
-RELEASE_FLAGS := -g -O3 -fopenmp -Wno-maybe-uninitialized
-SUPPRESS_FLAGS := -Wno-deprecated-literal-operator
+RELEASE_FLAGS := -O3 -fopenmp
+SUPPRESS_FLAGS := -Wno-deprecated-literal-operator -Wno-maybe-uninitialized
 
 SRC_DIR := src
 INCLUDE_DIR := include

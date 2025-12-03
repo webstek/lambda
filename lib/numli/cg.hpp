@@ -94,6 +94,9 @@ template <bra::arithmetic T> struct rgb
   constexpr rgb(T r, T g, T b) {c[0]=r; c[1]=g; c[2]=b;}
   constexpr rgb(T v) {c[0]=v; c[1]=v; c[2]=v;}
   constexpr rgb& operator=(T v) {c[0]=v; c[1]=v; c[2]=v; return *this;}
+  constexpr float r() const {return c[0];}
+  constexpr float g() const {return c[1];}
+  constexpr float b() const {return c[2];}
   constexpr std::string toString()
     {return std::to_string(c[0])+std::to_string(c[1])+std::to_string(c[2]);}
   constexpr float luma() const {return 0.2126f*c[0]+0.7152f*c[1]+0.0722f*c[2];}
@@ -764,11 +767,12 @@ inline bool lambertiani(
   cg::lambertian const &mat,
   hitinfo const &hinfo,
   info<ℝ3,linRGB> &info,
-  RNG &rng)
+  RNG &rng,
+  float p)
 {
   // russian roulette chance
-  float const p = rng.flt();
-  if (p>mat.albedo.luma()) { return false; }
+  float const ξ = rng.flt();
+  if (ξ>p) { return false; }
 
   // generate outgoing direction and fill probability
   basis const base(hinfo.tangent^hinfo.n, hinfo.tangent, hinfo.n);
@@ -784,18 +788,43 @@ inline bool lambertiani(
 }
 /// @brief probability of lambertian generating the sample direction
 inline float probForLambertian(
-  lambertian const &l, hitinfo const &hinfo, ℝ3 const &i)
-  { return hinfo.n|i * inv_π<float>; }
+  lambertian const &l, hitinfo const &hinfo, ℝ3 const &i, float p)
+  { return p * hinfo.n|i * inv_π<float>; }
 
 
 /// @brief samples blinn material for an incoming direction
 inline bool blinni(
-  cg::blinn const &mat, hitinfo const &hinfo, info<ℝ3,linRGB> &info, RNG &rng)
+  cg::blinn const &b, 
+  hitinfo const &hinfo, 
+  info<ℝ3,linRGB> &info, 
+  RNG &rng, 
+  float p)
 {
+  float const lobe = rng.flt();
+  if (lobe>=p) { return false; }
+
+  float p_d = b.Kd.luma();
+  float p_r = b.Ks.luma();
+  float const inv_tot = 1.f/(p_d+p_r);
+  p_d *= p*inv_tot;
+  p_r *= p*inv_tot;
+
+  if (lobe<p_d)
+  { // diffuse lobe sample
+
+  } else if (lobe<p_d+p_r)
+  { // reflection lobe sample
+
+  }
+
   return false;
 }
 /// @brief probability of blinn generating the sample direction
-inline float probForBlinn(blinn const &mat, hitinfo const &hinfo, ℝ3 const &i)
+inline float probForBlinn(
+  blinn const &b, 
+  hitinfo const &hinfo, 
+  ℝ3 const &i, 
+  float p)
 {
   return 0.f;
 }
@@ -807,22 +836,23 @@ constexpr bool materiali(
   hitinfo const &hinfo,
   ℝ3 const &o,
   info<ℝ3,linRGB> &info,
-  RNG &rng)
+  RNG &rng,
+  float p)
 {
   return std::visit(Overload{
-      [&](cg::lambertian const &mat){return lambertiani(mat,hinfo,info,rng);},
-      [&](cg::blinn const &mat){return blinni(mat,hinfo,info,rng);},
+      [&](cg::lambertian const &l){return lambertiani(l,hinfo,info,rng,p);},
+      [&](cg::blinn const &b){return blinni(b,hinfo,info,rng,p);},
       [](auto const &){return false;}
     }, *mat);
 }
 
 /// @brief material sample evaluation dispatch 
 constexpr float probForMateriali(
-  Material const *mat, hitinfo const &hinfo, ℝ3 const &i)
+  Material const *mat, hitinfo const &hinfo, ℝ3 const &i, float p)
 {
   return std::visit(Overload{
-      [&](cg::lambertian const &l){return probForLambertian(l,hinfo,i);},
-      [&](cg::blinn const &m){return probForBlinn(m,hinfo,i);},
+      [&](cg::lambertian const &l){return probForLambertian(l,hinfo,i,p);},
+      [&](cg::blinn const &m){return probForBlinn(m,hinfo,i,p);},
       [](auto const&){return 0.f;}
     }, *mat);
 }
