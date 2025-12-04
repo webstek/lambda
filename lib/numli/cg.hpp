@@ -444,21 +444,19 @@ struct lambertian : item
 {
   linRGB albedo;
   constexpr linRGB BRDFcosθ(ℝ3 const &i, ℝ3 const &n) const 
-    { return albedo*inv_π<float>*std::abs(i|n); }
+    { return albedo*inv_π<float>*nl::max(0.f,i|n); }
 };
 struct blinn : item
 {
   linRGB Kd, Ks, Kt, Le;
-  float α, ior, p_d, p_spec, w_r, w_t, F0_front, F0_back;
+  float α, ior, p_d, p_spec, w_r, w_t, F0;
   constexpr void init() 
   { 
     p_d    = Kd.luma();
-    w_r    = Kd.luma();
+    w_r    = Ks.luma();
     w_t    = Kt.luma();
     p_spec = 1.f-p_d;
-    float inv_ior = 1.f/ior;
-    F0_front = (inv_ior*inv_ior-2.f*inv_ior+1.f)/(inv_ior*inv_ior+2.f*inv_ior+1.f);
-    F0_back = (ior*ior-2.f*ior+1.f)/(ior*ior+2.f*ior+1.f);
+    F0 = (ior*ior-2.f*ior+1.f)/(ior*ior+2.f*ior+1.f);
   }
   constexpr float fresnel(float F0, float cos_i) const 
     { return F0+(1.f-F0)*std::pow(1.f-cos_i,5); }
@@ -471,26 +469,29 @@ struct blinn : item
     p_t/=tot;
     return {p_r, p_t};
   }
-  constexpr linRGB fdcosθ(float cos_i) const { return Kd*inv_π<float>*cos_i; }
+  constexpr linRGB fdcosθ(float cos_i) const 
+    { return Kd*inv_π<float>*nl::max(0.f,cos_i); }
   constexpr linRGB frcosθ(float cos_h, float F) const
-    { return (Ks+F*Kt)*(α+2)*.125f*inv_π<float>*std::pow(std::abs(cos_h),α); }
+    { return (Ks+F*Kt)*(α+2)*.125f*inv_π<float>*std::pow(cos_h,α); }
   constexpr linRGB ftcosθ(float cos_h_t, float F) const
-    { return Kt*(1-F)*(α+2)*.125f*inv_π<float>*std::pow(std::abs(cos_h_t),α); }
-  constexpr linRGB BSDFcosθ(ℝ3 const &i, ℝ3 const &o, ℝ3 const &n) const 
+    { return Kt*(1-F)*(α+2)*.125f*inv_π<float>*std::pow(cos_h_t,α); }
+  constexpr linRGB BSDFcosθ(
+    ℝ3 const &i, ℝ3 const &o, ℝ3 const &n, bool front) const 
   { 
-    bool const front = (o|n) > 0.f;
-    float const F0 = front ? F0_front : F0_back;
     float const η = front ? 1.f/ior : ior;
-    float const F = fresnel(F0, std::abs(i|n));
-    return fdcosθ(max(i|n,0.f)) + frcosθ((i+o).normalized()|n,F)
-      + ftcosθ(-(η*i+o).normalized()|n,F);
+    float const cos_i = i|n;
+    float const cos_o = o|n;
+    float const F = fresnel(F0, cos_o);
+    if (cos_i>0.f)
+      { return fdcosθ(cos_i) + frcosθ((i+o).normalized()|n,F); } 
+    else { return ftcosθ(-(η*i+o).normalized()|n,F); }
   }
-  /// @brief returns p(i|material sampled)
+  /// @brief returns p(i|diffuse sampled)
   constexpr float fdiProb(float cos_i) const 
-    { return p_d*cos_i*inv_π<float>; }
-  /// @brief returns p(h)
+    { return std::abs(cos_i)*inv_π<float>; }
+  /// @brief returns p(h|conditions)
   constexpr float blinnhProb(float cos_h) const 
-    { return std::pow(std::abs(cos_h),α+1)*(α+1)*.5f*inv_π<float>; } // excludes 1.f/(o|h) of Jacobian
+    { return std::pow(std::abs(cos_h),α+1)*(α+1)*.5f*inv_π<float>; }
 };
 struct microfacet : item
 {
@@ -509,11 +510,12 @@ constexpr linRGB BxDFcosθ(
   Material const &mat, 
   ℝ3 const &i, 
   ℝ3 const &o, 
-  ℝ3 const &n)
+  ℝ3 const &n,
+  bool front)
 {
   return std::visit(Overload{
     [&](lambertian const &mat){return mat.BRDFcosθ(i,n);},
-    [&](blinn const &mat)     {return mat.BSDFcosθ(i,o,n);},
+    [&](blinn const &mat)     {return mat.BSDFcosθ(i,o,n,front);},
     [](auto const &){return linRGB(1.f,0.f,0.f);}},
     mat);
 }
@@ -558,6 +560,7 @@ struct hitinfo
   bool front;
   materialidx mat;
   objectidx obj;
+  constexpr ℝ3 n() const { return front ? F.z : -F.z; }
 };
 
 struct camera 
@@ -570,7 +573,7 @@ struct camera
   void init()
   {
     // assumes focal distance 1
-    Δ = 2*D*tanf32(fov*π<float>/360)/height;
+    Δ = 2*D*tanf32(.5f*deg2rad(fov))/height;
     h = Δ*height;
     w = Δ*width;
   }
@@ -597,7 +600,7 @@ struct scene
 namespace intersect
 { // ** nl::cg::intersect *****************************************************
 
-constexpr float BIAS = 1e3*ε<float>;
+constexpr float BIAS = constexprSqrt(ε<float>);
 
 /// @brief Sphere-Ray intersection
 /// @param s sphere to intersect
@@ -606,7 +609,6 @@ constexpr float BIAS = 1e3*ε<float>;
 /// @return true on intersection, otherwise false
 constexpr bool sphere(cg::sphere const &s, ray const &w_ray, hitinfo &hinfo)
 { 
-  // convert ray to local space
   ℝ3 const pos = s.T.pos();
   ℝ3 const d = w_ray.p-pos;
 
@@ -615,14 +617,14 @@ constexpr bool sphere(cg::sphere const &s, ray const &w_ray, hitinfo &hinfo)
   float const b = 2*(d|w_ray.u);
   float const c = (d|d)-s.size*s.size;
   float const Δ = b*b - 4*a*c;
-  if (Δ < BIAS) [[likely]] { return false; }
+  if (Δ < .1f*BIAS) [[likely]] { return false; }
 
   // otherwise return closest non-negative t
   float const inv_2a = 1.f/(2.f*a);
   float const tp = (-b + std::sqrtf(Δ))*inv_2a;
   float const tm = (-b - std::sqrtf(Δ))*inv_2a;
   float t = tm;
-  if (tm < BIAS)   [[unlikely]] { t=tp; }        // check for hit too close
+  if (tm < BIAS)   [[unlikely]] { t=tp; }      // check for hit too close
   if (t  < BIAS)   [[unlikely]] { return false; }
   if (hinfo.z < t) [[unlikely]] { return false; } // check for closest hit
 
@@ -668,7 +670,7 @@ constexpr bool plane(cg::plane const &p, ray const &w_ray, hitinfo &hinfo)
   hinfo.F.z = p.T.toWorld(normal({0.f,0.f,1.f})).normalized();
   hinfo.F.x = p.T.toWorld(vec({0.f,1.f,0.f})).normalized();
   hinfo.F.y = hinfo.F.z^hinfo.F.x;
-  hinfo.front = l_ray.u[2]<0.f;
+  hinfo.front = (w_ray.u|hinfo.F.z) < 0.f;
   hinfo.mat = p.mat;
   hinfo.obj = p.obj;
   return true;
@@ -831,20 +833,22 @@ inline bool lambertiani(
   ℝ3 dir = stoch::CosHemi(rng.flt(),rng.flt());
   if (!hinfo.front) { dir[2]*=-1; } // flip to correct hemisphere if needed
   ℝ3 i = hinfo.F.toBasis(dir);
-  info.prob = p*dir[2]/π<float>;
+  info.prob = p*std::abs(dir[2])*inv_π<float>;
   info.val = i;
 
   // evaluate BRDFcosθ
-  info.mult = mat.BRDFcosθ(i, hinfo.F.z);
-  info.weight = mat.albedo;
+  info.mult = mat.BRDFcosθ(i,hinfo.n());
+  info.weight = mat.albedo/p;
   return true;
 }
 /// @brief probability of lambertian generating the sample direction
 inline float probForLambertian(
   hitinfo const &hinfo, ℝ3 const &i, ℝ3 const &o, float p)
 { 
-  if ((i|o) < 0.f) return 0.f;
-  return p * std::abs(hinfo.F.z|i)*inv_π<float>; 
+  ℝ3 const n = hinfo.n();
+  float const cos_i = i|n;
+  if ((i|n)<0.f || (o|n)<0.f) return 0.f;
+  return p*cos_i*inv_π<float>;
 }
 
 /// @brief Blinn half-vector sample
@@ -881,17 +885,16 @@ inline bool blinni(
     i_R = bra::reflect(o,h);
     i_T = transmit(o,h,η); // returns {0,0,0} if TIR
     
-    float const F0 = hinfo.front ? b.F0_front : b.F0_back;
     /// @todo, compare with transmitted Fresnel split
     float const cos_o = o|h;
-    float F = b.fresnel(F0,cos_o);
+    float F = b.fresnel(b.F0,cos_o);
     if (i_T[0]==0.f) { F=1.f; } // TIR, all reflection
     auto [p_r, p_t] = b.fresnelSplit(F);
 
     if (lobe<pp_spec*p_r)
     { // specular sample
       // p(sample)p(spec|sample)p(r|spec)p(i|r)
-      info.prob = pp_spec*p_r*b.blinnhProb(ω[2])*.25f; // omits 1/cos_i
+      info.prob = pp_spec*p_r*b.blinnhProb(ω[2])*.25f;
       info.val  = i_R;
       info.mult = b.frcosθ(ω[2],F);
       // frcosθ/p(i)
@@ -899,22 +902,23 @@ inline bool blinni(
       return true;
     } else
     { // transmissive sample
-      // // float const cos_it = -h|i_T;
-      // // float const J = cos_o/((cos_it+η*cos_o)*(cos_it+η*cos_o));
-      // info.prob = pp_spec*p_t*b.blinnhProb(ω[2])*.25f; // omits 1/(i_T|h_t)
-      // info.val  = i_T;
-      // info.mult = b.ftcosθ(ω[2], F);
-      // return true;
-      return false;
+      // float const cos_it = -h|i_T;
+      // float const J = cos_o/((cos_it+η*cos_o)*(cos_it+η*cos_o));
+      info.prob = pp_spec*p_t*b.blinnhProb(ω[2])*.25f;
+      info.val  = i_T;
+      info.mult = b.ftcosθ(ω[2], F);
+      info.weight = b.Kt*(1-F)*(b.α+2)/(pp_spec*p_t*std::abs(ω[2])*(b.α+1));
+      return true;
     }
   } else if (lobe<pp_spec+pp_d)
   { // diffuse lobe sample
-    ℝ3 const dir = stoch::CosHemi(rng.flt(), rng.flt());
+    ℝ3 dir = stoch::CosHemi(rng.flt(), rng.flt());
+    if (!hinfo.front) { dir[2]*=-1; }
     ℝ3 const i = hinfo.F.toBasis(dir);
-    info.prob = p*b.fdiProb(dir[2]);
+    info.prob = pp_d*b.fdiProb(dir[2]);
     info.val = i;
     info.mult = b.fdcosθ(dir[2]);
-    info.weight = b.Kd/p;
+    info.weight = b.Kd/pp_d;
     return true;
   }
   return false;
@@ -927,24 +931,23 @@ inline float probForBlinn(
   ℝ3 const &i, 
   float p)
 {
-  ℝ3 const n = hinfo.front ? hinfo.F.z : -hinfo.F.z;
-  float const F0 = hinfo.front ? b.F0_front : b.F0_back;
-  float const F = b.fresnel(F0, o|n);
-  float const cos_i = nl::max(i|n,0.f);
+  ℝ3 const n = hinfo.n();
+  float const cos_i = i|n;
+  float const cos_o = o|n;
+  float const F = b.fresnel(b.F0, cos_o);
   auto [p_r, p_t] = b.fresnelSplit(F);
-  if ((i|o) > 0.f)
+  if (cos_i>0.f)
   { // reflection/diffuse
     ℝ3 const h = (i+o).normalized();
     // p(i) = p*(p(d)p(i|d)+p(spec)*p(r|spec)*p(i|r))
-    return p*(b.fdiProb(cos_i)+b.p_spec*p_r*b.blinnhProb(h|n)*.25f); // omits 1.f/(i|h)
+    return p*(b.p_d*b.fdiProb(cos_i)+b.p_spec*p_r*b.blinnhProb(h|n)*.25f);
   } else
   { // transmition
-    // float const ior = hinfo.front ? 1.f/b.ior : b.ior;
-    // if ((1.f-ior*ior*(1.f-cos_i*cos_i)) < 0.f) { return 0.f; } // should be tir
-    // // p(i) = pp(spec)p(t|spec)p(i|t)
-    // ℝ3 const h = (ior*i+o).normalized();
-    // return p*b.p_spec*p_t*b.blinnhProb(h|n)*.25f; // omits 1.f/(i|h_t)
-    return 0.f;
+    float const ior = hinfo.front ? 1.f/b.ior : b.ior;
+    if ((1.f-ior*ior*(1.f-cos_i*cos_i)) < 0.f) { return 0.f; } // should be tir
+    // p(i) = pp(spec)p(t|spec)p(i|t)
+    ℝ3 const h = (ior*i+o).normalized();
+    return p*b.p_spec*p_t*b.blinnhProb(h|n)*.25f;
   }
 }
 

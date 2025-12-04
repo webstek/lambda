@@ -16,12 +16,10 @@ directly and rebuild. To change the scene, edit `main.cpp` directly and
 rebuild.
 
 ## Future Work
-* Command line arguments
 * HPC script
 * Anisotropic material
 * Spectral rendering
 * Triangle meshes + BVH
-* Absorption
 * Textures
 * loading `gltf` scenes linked in `.nls` files
 * Verifying Depth of Field
