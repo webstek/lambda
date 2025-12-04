@@ -10,9 +10,9 @@
 using namespace nl::cg;
 using ℝ3 = nl::ℝ3;
 // ************************************
-constexpr uint64_t MAX_SCATTERINGS = 64;
-constexpr uint64_t SPP   = 128;
-constexpr float SAMPLE_P = 0.9;
+constexpr uint64_t MAX_SCATTERINGS = 128;
+constexpr uint64_t SPP   = 8192;
+constexpr float SAMPLE_P = 0.95;
 // ************************************
 
 void Renderer::render()
