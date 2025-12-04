@@ -311,6 +311,17 @@ constexpr transform operator<<(transform const &T1, transform const &T2)
   T.M_inv = T1.M_inv*T2.M_inv;
   return T;
 }
+
+/// @brief transmission direction for relative ior (ηo/ηi), normal n
+/// @warning ASSUMES o and n are unit vectors in the same hemisphere
+constexpr ℝ3 transmit(ℝ3 const &o, ℝ3 const &n, float ior)
+{
+  float const cos_i = o|n;
+  float const cos_t2 = 1.f-ior*ior*(1.f-cos_i*cos_i);
+  if (cos_t2 < 0.f) { return ℝ3(0.f); } // TIR
+  return -ior*o-(std::sqrtf(cos_t2)-ior*cos_i)*n;
+}
+
 // ** end of spatial **********************************************************
 
 
@@ -433,27 +444,53 @@ struct lambertian : item
 {
   linRGB albedo;
   constexpr linRGB BRDFcosθ(ℝ3 const &i, ℝ3 const &n) const 
-    { return albedo*inv_π<float>*max(i|n,0.f); }
+    { return albedo*inv_π<float>*std::abs(i|n); }
 };
 struct blinn : item
 {
   linRGB Kd, Ks, Kt, Le;
-  float α, ior;
-  float p_d, p_r;
-  constexpr void calcLobeProbs() 
-    { p_d=Kd.luma(); p_r=Ks.luma(); float tot=p_d+p_r; p_d/=tot; p_r/=tot; }
+  float α, ior, p_d, p_spec, w_r, w_t, F0_front, F0_back;
+  constexpr void init() 
+  { 
+    p_d    = Kd.luma();
+    w_r    = Kd.luma();
+    w_t    = Kt.luma();
+    p_spec = 1.f-p_d;
+    float inv_ior = 1.f/ior;
+    F0_front = (inv_ior*inv_ior-2.f*inv_ior+1.f)/(inv_ior*inv_ior+2.f*inv_ior+1.f);
+    F0_back = (ior*ior-2.f*ior+1.f)/(ior*ior+2.f*ior+1.f);
+  }
+  constexpr float fresnel(float F0, float cos_i) const 
+    { return F0+(1.f-F0)*std::pow(1.f-cos_i,5); }
+  constexpr std::pair<float,float> fresnelSplit(float F) const
+  {
+    float p_r = w_r+F*w_t;
+    float p_t = (1.f-F)*w_t;
+    float const tot = p_r+p_t;
+    p_r/=tot;
+    p_t/=tot;
+    return {p_r, p_t};
+  }
   constexpr linRGB fdcosθ(float cos_i) const { return Kd*inv_π<float>*cos_i; }
-  constexpr linRGB frcosθ(float cos_h) const
-    { return Ks*(α+2)*.125f*inv_π<float>*std::pow(cos_h,α); }
+  constexpr linRGB frcosθ(float cos_h, float F) const
+    { return (Ks+F*Kt)*(α+2)*.125f*inv_π<float>*std::pow(std::abs(cos_h),α); }
+  constexpr linRGB ftcosθ(float cos_h_t, float F) const
+    { return Kt*(1-F)*(α+2)*.125f*inv_π<float>*std::pow(std::abs(cos_h_t),α); }
   constexpr linRGB BSDFcosθ(ℝ3 const &i, ℝ3 const &o, ℝ3 const &n) const 
   { 
-    return fdcosθ(max(i|n,0.f)) + frcosθ((i+o).normalized()|n);
-      //+ Kt*(α+2)*0.125f*inv_π<float>*std::pow(n|-(ior*i+o).normalized(),α); 
+    bool const front = (o|n) > 0.f;
+    float const F0 = front ? F0_front : F0_back;
+    float const η = front ? 1.f/ior : ior;
+    float const F = fresnel(F0, std::abs(i|n));
+    return fdcosθ(max(i|n,0.f)) + frcosθ((i+o).normalized()|n,F)
+      + ftcosθ(-(η*i+o).normalized()|n,F);
   }
-  constexpr float fdSampleProb(float cos_i) const 
+  /// @brief returns p(i|material sampled)
+  constexpr float fdiProb(float cos_i) const 
     { return p_d*cos_i*inv_π<float>; }
-  constexpr float frSampleProb(float cos_h) const 
-    { return p_r*std::pow(cos_h,α+1)*(α+1)*.5f*inv_π<float>*.25f; }
+  /// @brief returns p(h)
+  constexpr float blinnhProb(float cos_h) const 
+    { return std::pow(std::abs(cos_h),α+1)*(α+1)*.5f*inv_π<float>; } // excludes 1.f/(o|h) of Jacobian
 };
 struct microfacet : item
 {
@@ -791,8 +828,9 @@ inline bool lambertiani(
   if (ξ>p) { return false; }
 
   // generate outgoing direction and fill probability
-  ℝ3 const dir = stoch::CosHemi(rng.flt(),rng.flt());
-  ℝ3 const i   = hinfo.F.toBasis(dir);
+  ℝ3 dir = stoch::CosHemi(rng.flt(),rng.flt());
+  if (!hinfo.front) { dir[2]*=-1; } // flip to correct hemisphere if needed
+  ℝ3 i = hinfo.F.toBasis(dir);
   info.prob = p*dir[2]/π<float>;
   info.val = i;
 
@@ -802,8 +840,12 @@ inline bool lambertiani(
   return true;
 }
 /// @brief probability of lambertian generating the sample direction
-inline float probForLambertian(hitinfo const &hinfo, ℝ3 const &i, float p)
-  { return p * nl::max(hinfo.F.z|i,0.f) * inv_π<float>; }
+inline float probForLambertian(
+  hitinfo const &hinfo, ℝ3 const &i, ℝ3 const &o, float p)
+{ 
+  if ((i|o) < 0.f) return 0.f;
+  return p * std::abs(hinfo.F.z|i)*inv_π<float>; 
+}
 
 /// @brief Blinn half-vector sample
 constexpr ℝ3 blinnh(float α, float x0, float x1)
@@ -826,29 +868,53 @@ inline bool blinni(
   float const lobe = rng.flt();
   if (lobe>=p) { return false; }
   
-  float const pp_d = p*b.p_d;
-  float const pp_r = p*b.p_r;
+  float const pp_d = p*b.p_d; float const pp_spec = p*b.p_spec;
 
-  if (lobe<pp_d)
+  if (lobe<pp_spec)
+  { // specular sample
+    // sample half vector, split on Fresnel
+    float const η = hinfo.front ? 1.f/b.ior : b.ior;
+    ℝ3 ω, h, i_R, i_T;
+    ω = blinnh(b.α,rng.flt(),rng.flt());
+    if (!hinfo.front) { ω[2]*=-1; } // flip half vector to outgoing hemisphere
+    h = hinfo.F.toBasis(ω);
+    i_R = bra::reflect(o,h);
+    i_T = transmit(o,h,η); // returns {0,0,0} if TIR
+    
+    float const F0 = hinfo.front ? b.F0_front : b.F0_back;
+    /// @todo, compare with transmitted Fresnel split
+    float const cos_o = o|h;
+    float F = b.fresnel(F0,cos_o);
+    if (i_T[0]==0.f) { F=1.f; } // TIR, all reflection
+    auto [p_r, p_t] = b.fresnelSplit(F);
+
+    if (lobe<pp_spec*p_r)
+    { // specular sample
+      // p(sample)p(spec|sample)p(r|spec)p(i|r)
+      info.prob = pp_spec*p_r*b.blinnhProb(ω[2])*.25f; // omits 1/cos_i
+      info.val  = i_R;
+      info.mult = b.frcosθ(ω[2],F);
+      // frcosθ/p(i)
+      info.weight = (b.Ks+b.Kt*F)*(b.α+2)/(pp_spec*p_r*std::abs(ω[2])*(b.α+1));
+      return true;
+    } else
+    { // transmissive sample
+      // // float const cos_it = -h|i_T;
+      // // float const J = cos_o/((cos_it+η*cos_o)*(cos_it+η*cos_o));
+      // info.prob = pp_spec*p_t*b.blinnhProb(ω[2])*.25f; // omits 1/(i_T|h_t)
+      // info.val  = i_T;
+      // info.mult = b.ftcosθ(ω[2], F);
+      // return true;
+      return false;
+    }
+  } else if (lobe<pp_spec+pp_d)
   { // diffuse lobe sample
     ℝ3 const dir = stoch::CosHemi(rng.flt(), rng.flt());
     ℝ3 const i = hinfo.F.toBasis(dir);
-    info.prob = p*b.fdSampleProb(dir[2]);
+    info.prob = p*b.fdiProb(dir[2]);
     info.val = i;
     info.mult = b.fdcosθ(dir[2]);
     info.weight = b.Kd/p;
-    return true;
-  } else if (lobe<pp_d+pp_r)
-  { // reflection lobe sample
-    ℝ3 const ω = blinnh(b.α,rng.flt(),rng.flt());
-    ℝ3 const h = hinfo.F.toBasis(ω);
-    ℝ3 const i = bra::reflect(o,h);
-    // p(lobe)p(h|lobe)p(i|h)
-    info.prob = p*b.frSampleProb(ω[2]);
-    info.val  = i;
-    info.mult = b.frcosθ(ω[2]);
-    // frcosθ/p(i)
-    info.weight = b.Ks*(b.α+2)/(pp_r*ω[2]*(b.α+1));
     return true;
   }
   return false;
@@ -861,10 +927,25 @@ inline float probForBlinn(
   ℝ3 const &i, 
   float p)
 {
-  // p(i) = p*(p_d*p(i|p_d)+p_r*p(i|p_r))
-  float const cos_i = nl::max(i|hinfo.F.z,0.f);
-  ℝ3 const h = (i+o).normalized();
-  return p*(b.fdSampleProb(cos_i)+b.frSampleProb(h|hinfo.F.z));
+  ℝ3 const n = hinfo.front ? hinfo.F.z : -hinfo.F.z;
+  float const F0 = hinfo.front ? b.F0_front : b.F0_back;
+  float const F = b.fresnel(F0, o|n);
+  float const cos_i = nl::max(i|n,0.f);
+  auto [p_r, p_t] = b.fresnelSplit(F);
+  if ((i|o) > 0.f)
+  { // reflection/diffuse
+    ℝ3 const h = (i+o).normalized();
+    // p(i) = p*(p(d)p(i|d)+p(spec)*p(r|spec)*p(i|r))
+    return p*(b.fdiProb(cos_i)+b.p_spec*p_r*b.blinnhProb(h|n)*.25f); // omits 1.f/(i|h)
+  } else
+  { // transmition
+    // float const ior = hinfo.front ? 1.f/b.ior : b.ior;
+    // if ((1.f-ior*ior*(1.f-cos_i*cos_i)) < 0.f) { return 0.f; } // should be tir
+    // // p(i) = pp(spec)p(t|spec)p(i|t)
+    // ℝ3 const h = (ior*i+o).normalized();
+    // return p*b.p_spec*p_t*b.blinnhProb(h|n)*.25f; // omits 1.f/(i|h_t)
+    return 0.f;
+  }
 }
 
 
@@ -889,7 +970,7 @@ constexpr float probForMateriali(
   Material const *mat, hitinfo const &hinfo, ℝ3 const &i, ℝ3 const &o, float p)
 {
   return std::visit(Overload{
-      [&](cg::lambertian const &){return probForLambertian(hinfo,i,p);},
+      [&](cg::lambertian const &){return probForLambertian(hinfo,i,o,p);},
       [&](cg::blinn const &m){return probForBlinn(m,hinfo,i,o,p);},
       [](auto const&){return 0.f;}
     }, *mat);
@@ -1121,7 +1202,7 @@ inline void loadBlinn(blinn &m, json const &j)
   m.Le = Le;
   m.α = alpha;
   m.ior = ior;
-  m.calcLobeProbs();
+  m.init();
 }
 /// @todo
 inline void loadMicrofacet(microfacet &m, json const &j) {(void)m; (void)j;}

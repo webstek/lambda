@@ -21,7 +21,7 @@ public:
 
   void render();
   nl::cg::linRGB tracePath(
-    nl::cg::ray const &ray, nl::RNG &rng, int scatters) const;
+    nl::cg::ray const &ray, nl::RNG &rng, uint64_t scatters) const;
 
   void loadScene(std::string fpath);
   void saveImage(std::string fname) const;

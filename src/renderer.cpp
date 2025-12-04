@@ -10,8 +10,8 @@
 using namespace nl::cg;
 using ℝ3 = nl::ℝ3;
 // ************************************
-constexpr uint64_t MAX_SCATTERINGS = 64;
-constexpr uint64_t SPP   = 512;
+constexpr uint64_t MAX_SCATTERINGS = 16;
+constexpr uint64_t SPP   = 64;
 constexpr float SAMPLE_P = 0.9;
 // ************************************
 
@@ -50,7 +50,7 @@ void Renderer::render()
 // ****************************************************************************
 
 /// @todo Only handles direct lighting paths at the moment (DL by NEE) 
-linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, int scatters) const
+linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, uint64_t scatters) const
 {
   hitinfo hinfo;
   if (intersect::scene(scene, r, hinfo))
