@@ -11,7 +11,7 @@ using namespace nl::cg;
 using ℝ3 = nl::ℝ3;
 // ************************************
 constexpr uint64_t MAX_SCATTERINGS = 128;
-constexpr uint64_t SPP   = 8192;
+constexpr uint64_t SPP   = 1;
 constexpr float SAMPLE_P = 0.95;
 // ************************************
 
@@ -92,6 +92,7 @@ linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, uint64_t scatters) const
   // Light IS estimate
   linRGB const L_IS = si_i_L.mult * coef / (si_i_L.prob*si_l.prob);
   // ** end of L IS estimate ****************************
+  return L_IS;
 
   // ** Material IS estimate ****************************
   // sample material:

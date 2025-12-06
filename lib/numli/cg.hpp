@@ -185,6 +185,8 @@ struct ray
   ray(ℝ4 const &p, ℝ4 const &u) : 
     p({p.elem[0],p.elem[1],p.elem[2]}), u({u.elem[0],u.elem[1],u.elem[2]}) {}
   constexpr pnt operator()(float t) { return p+t*u; }
+  constexpr std::array<float,6> plucker() const
+    { ℝ3 const m = p^u; return {u[0],u[1],u[2],m[0],m[1],m[2]}; }
 };
 
 struct basis
@@ -674,6 +676,14 @@ constexpr bool plane(cg::plane const &p, ray const &w_ray, hitinfo &hinfo)
   hinfo.mat = p.mat;
   hinfo.obj = p.obj;
   return true;
+}
+
+/// @brief Triangle-Ray intersection
+constexpr bool triangle(
+  cg::triangle const &t, ray const &w_ray, hitinfo &hinfo)
+{
+  auto [d0, d1, d2, m0, m1, m2] = w_ray.plucker();
+  return false;
 }
 
 
