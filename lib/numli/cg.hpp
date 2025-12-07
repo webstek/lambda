@@ -184,7 +184,7 @@ struct ray
   ray(ℝ3 const &p, ℝ3 const &u) : p(p), u(u) {}
   ray(ℝ4 const &p, ℝ4 const &u) : 
     p({p.elem[0],p.elem[1],p.elem[2]}), u({u.elem[0],u.elem[1],u.elem[2]}) {}
-  constexpr pnt operator()(float t) { return p+t*u; }
+  constexpr ℝ3 operator()(float t) const { return p+t*u; }
   constexpr std::array<float,6> plucker() const
     { ℝ3 const m = p^u; return {u[0],u[1],u[2],m[0],m[1],m[2]}; }
 };
@@ -203,9 +203,9 @@ struct basis
 constexpr basis orthonormalBasisOf(ℝ3 const &v)
 {
   ℝ3 const e2 = v.normalized();
-  float const x=e2[0];
-  float const y=e2[1];
-  float const z=e2[2];
+  float const &x=e2[0];
+  float const &y=e2[1];
+  float const &z=e2[2];
   ℝ3 e0, e1;
   if ( z >= y ) 
   {
@@ -339,18 +339,43 @@ struct aabb
 };
 struct triangle
 {
-  ℝ3 x0, x1, x2;
+  uint64_t V[3], E[3], GN;
 };
-struct vertex 
-{
-  vec n;
-};
+
 template <typename T> struct bvh {};
+
+/// @note All vertex data vectors are indexed by the same indices in F
 struct trimeshdata
 {
-  bvh<triangle>         _bvh;
-  std::vector<ℝ3>       V;
-  std::vector<uint32_t> F;
+  aabb bounds;
+  bvh<triangle>         _bvh;  ///< bvh over triangles F
+  std::vector<ℝ3>       V;     ///< vertices
+  std::vector<ℝ3>       N;     ///< vertex normals
+  std::vector<ℝ3>       T;     ///< vertex tangent vectors
+  std::vector<ℝ2>       u;     ///< vertex texture coords
+  std::vector<ℝ3>       E;     ///< edges
+  std::vector<ℝ3>       GN;    ///< face normals
+  std::vector<triangle> F;     ///< faces (triangles)
+  constexpr ℝ3 const& v(uint64_t face, int i) const {return V[F[face].V[i]];}
+  constexpr ℝ3 const& t(uint64_t face, int i) const {return T[F[face].V[i]];}
+  constexpr ℝ2 const& uv(uint64_t face, int i) const {return u[F[face].V[i]];}
+  constexpr ℝ3 const& e(uint64_t face, int i) const {return E[F[face].E[i]];}
+  constexpr ℝ3 const& gn(uint64_t face) const {return GN[face];}
+  constexpr ℝ3 n(uint64_t face, ℝ3 const &b) const
+  { 
+    triangle const &tri = F[face]; 
+    return b[0]*N[tri.V[0]]+b[1]*V[tri.V[1]]+b[2]*V[tri.V[2]]; 
+  }
+  constexpr ℝ3 t(uint64_t face, ℝ3 const &b) const
+  {
+    triangle const &tri = F[face];
+    return b[0]*T[tri.V[0]]+b[1]*T[tri.V[1]]+b[2]*T[tri.V[2]];
+  }
+  constexpr ℝ2 uv(uint64_t face, ℝ3 const &b) const
+  {
+    triangle const &tri = F[face];
+    return b[0]*u[tri.V[0]]+b[1]*u[tri.V[1]]+b[2]*u[tri.V[2]];
+  }
 };
 // ** end of structures ***************
 
@@ -611,28 +636,27 @@ constexpr float BIAS = constexprSqrt(ε<float>);
 /// @return true on intersection, otherwise false
 constexpr bool sphere(cg::sphere const &s, ray const &w_ray, hitinfo &hinfo)
 { 
-  ℝ3 const pos = s.T.pos();
-  ℝ3 const d = w_ray.p-pos;
+  ray const l_ray = s.T.toLocal(w_ray);
 
   // descriminant of ray-sphere intersection equation
-  float const a = w_ray.u|w_ray.u;
-  float const b = 2*(d|w_ray.u);
-  float const c = (d|d)-s.size*s.size;
+  float const a = l_ray.u|l_ray.u;
+  float const b = 2*(l_ray.p|w_ray.u);
+  float const c = (l_ray.p|l_ray.p)-1.f;
   float const Δ = b*b - 4*a*c;
   if (Δ < .1f*BIAS) [[likely]] { return false; }
 
   // otherwise return closest non-negative t
-  float const inv_2a = 1.f/(2.f*a);
+  float const inv_2a = .5f/a;
   float const tp = (-b + std::sqrtf(Δ))*inv_2a;
   float const tm = (-b - std::sqrtf(Δ))*inv_2a;
   float t = tm;
-  if (tm < BIAS)   [[unlikely]] { t=tp; }      // check for hit too close
-  if (t  < BIAS)   [[unlikely]] { return false; }
-  if (hinfo.z < t) [[unlikely]] { return false; } // check for closest hit
+  if (tm < BIAS) [[unlikely]] { t=tp; } // hit too close
+  if (t  < BIAS)   { return false; }    // hit behind ray origin
+  if (hinfo.z < t) { return false; }    // closer hit
 
   // ray hits
-  ℝ3   const p = w_ray.p+t*w_ray.u;
-  ℝ3   const n = (p-pos).normalized();
+  ℝ3 const p = l_ray(t);
+  ℝ3 const n = s.T.toWorld(normal(p));
   bool const front = (n|w_ray.u) < 0.f;
 
   // (θ,φ) parameterization for tangent (and bitangent)
@@ -646,7 +670,7 @@ constexpr bool sphere(cg::sphere const &s, ray const &w_ray, hitinfo &hinfo)
 
   // populate hinfo in world space
   hinfo.z = t;
-  hinfo.p = p;
+  hinfo.p = s.T.toWorld(pnt(p));
   hinfo.F.x = t_vec;
   hinfo.F.y = b_vec;
   hinfo.F.z = n;
@@ -662,7 +686,7 @@ constexpr bool plane(cg::plane const &p, ray const &w_ray, hitinfo &hinfo)
 {
   ray const l_ray = p.T.toLocal(w_ray);
   float const t = -l_ray.p[2] / l_ray.u[2];
-  ℝ3 const x = l_ray.p+t*l_ray.u;
+  ℝ3 const x = l_ray(t);
   if (x[0]<-1.f || x[0]>1.f || x[1]<-1.f || x[1]>1.f || t<BIAS || t>hinfo.z) 
     [[likely]] { return false; } // ray misses
   
@@ -678,12 +702,72 @@ constexpr bool plane(cg::plane const &p, ray const &w_ray, hitinfo &hinfo)
   return true;
 }
 
+/// @brief aabb intersection
+/// @todo
+
 /// @brief Triangle-Ray intersection
-constexpr bool triangle(
-  cg::triangle const &t, ray const &w_ray, hitinfo &hinfo)
+/// @warning hinfo.mat and hinfo.obj are NOT set
+constexpr bool trimeshdata(
+  uint64_t face, cg::trimeshdata const &mesh, ray const &l_ray, hitinfo &hinfo)
 {
-  auto [d0, d1, d2, m0, m1, m2] = w_ray.plucker();
-  return false;
+  ℝ3 const &v0 = mesh.v(face,0);
+  ℝ3 const &v1 = mesh.v(face,1);
+  ℝ3 const &v2 = mesh.v(face,2);
+  ℝ3 const &e0 = mesh.e(face,0);
+  ℝ3 const &e1 = mesh.e(face,1);
+  ℝ3 const &e2 = mesh.e(face,2);
+  ℝ3 const &gn = mesh.gn(face);
+  ℝ3 const m(l_ray.p^l_ray.u);
+  float const D = l_ray.u|gn;
+  if (std::abs(D)<.1f*BIAS) [[unlikely]] { return false; } // parallel
+  float const s0 = (l_ray.u|(v0^v1)) + (m|e0);
+  float const s1 = (l_ray.u|(v1^v2)) + (m|e1);
+  float const s2 = (l_ray.u|(v2^v0)) + (m|e2);
+  if (s0*D<-BIAS || s1*D<-BIAS || s2*D<-BIAS) [[likely]] 
+    { return false; } // not in triangle
+  float const t = ((v0-l_ray.p)|gn)/D;
+  if (t<0.f || hinfo.z < t) { return false; } // behind ray or not closest hit
+
+  // barycentric coordinates
+  float const inv_D = 1.f/D;
+  ℝ3 const b({s0*inv_D, s1*inv_D, s2*inv_D});
+
+  // populate hinfo
+  hinfo.z = t;
+  hinfo.p = l_ray(t);
+  hinfo.F.z = mesh.n(face,b);
+  hinfo.F.x = mesh.t(face,b);
+  hinfo.front = (gn|l_ray.u)<0.f;
+  return true;
+}
+
+
+/// @brief Mesh-Ray Intersection
+constexpr bool trimesh(
+  cg::trimesh const tmesh, 
+  ray const &w_ray, 
+  cg::scene const &sc, 
+  hitinfo &hinfo)
+{
+  bool hit_any = false;
+  auto const &mesh = std::get<cg::trimeshdata>(sc.meshes[tmesh.mesh]);
+  int n_faces = mesh.F.size();
+  ray const l_ray = tmesh.T.toLocal(w_ray);
+
+  /// @todo aabb check
+
+
+  /// @todo bvh acceleration
+  for (int i=0;i<n_faces;i++) { hit_any|=trimeshdata(i, mesh, l_ray, hinfo); }
+
+  // convert hinfo to world-space
+  hinfo.p   = tmesh.T.toWorld(pnt(hinfo.p));
+  hinfo.F.z = tmesh.T.toWorld(normal(hinfo.F.z));
+  hinfo.F.x = tmesh.T.toWorld(vec(hinfo.F.x));
+  hinfo.F.y = hinfo.F.z^hinfo.F.x;
+  hinfo.mat = tmesh.mat;
+  hinfo.obj = tmesh.obj;
+  return hit_any;
 }
 
 
@@ -705,8 +789,9 @@ constexpr bool scene(
   {
     if (i==skip) continue;
     const bool hit = std::visit(Overload{
-      [&](cg::sphere const &s){return sphere(s, r, h);},
+      [&](cg::sphere const &s){return sphere(s,r,h);},
       [&](cg::plane const &p){return plane(p,r,h);},
+      [&](cg::trimesh const &m){return trimesh(m,r,sc,h);},
       [] (auto const &) {return false;}},
       sc.objects[i]);
     hit_any |= hit;
@@ -1126,6 +1211,7 @@ inline void loadLights(
 
 /// @todo
 inline void loadGroup() {}
+
 inline void loadSphere(sphere &s, json const &j, list<Material> const &mats)
 {
   transform T;
@@ -1139,6 +1225,7 @@ inline void loadSphere(sphere &s, json const &j, list<Material> const &mats)
   s.size = sx;
   s.mat = mats.idxOf(j.at("material").get<std::string>());
 }
+
 inline void loadPlane(plane &p, json const &j, list<Material> const &mats) 
 {
   transform T;
@@ -1146,8 +1233,11 @@ inline void loadPlane(plane &p, json const &j, list<Material> const &mats)
   p.T = T;
   p.mat = mats.idxOf(j.at("material").get<std::string>());
 }
+
 /// @todo
 inline void loadTriMesh(trimesh &m, json const &j, list<Material> const &mats);
+
+/// @brief loads all scene objects
 inline void loadObjects(
   list<Object> &objs, 
   json const &j, 
