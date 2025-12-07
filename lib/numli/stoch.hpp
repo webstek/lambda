@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file stoch.hpp
 /// @author Kyle Webster
-/// @version 0.1
-/// @date 1 Dec 2025
+/// @version 0.2
+/// @date 6 Dec 2025
 /// @brief Numerics Library - Stochastic @ref stoch
 /// @details
 /// Collection of utilities related to stochastic processes

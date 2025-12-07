@@ -2,7 +2,7 @@
 /// @file bra.hpp
 /// @author Kyle Webster
 /// @version 0.7
-/// @date 3 Dec 2025
+/// @date 6 Dec 2025
 /// @brief Numerics Library - Algebra @ref bra
 /// @details
 /// Collection of algebraic structures and algorithms

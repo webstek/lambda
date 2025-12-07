@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file cg.hpp
 /// @author Kyle Webster
-/// @version 0.8
-/// @date 3 Dec 2025
+/// @version 0.10
+/// @date 6 Dec 2025
 /// @brief Numerics Library - Computer Graphics - @ref cg
 /// @details
 /// Collection of computer graphics structures and algorithms
@@ -393,7 +393,6 @@ constexpr ObjectType str2obj(std::string s)
 
 struct sphere : item
 {
-  float size;
   transform   T;
   materialidx mat;
   objectidx   obj;
@@ -448,6 +447,7 @@ struct dirlight : item
 struct spherelight : item
 {
   linRGB radiance;
+  float size;
   sphere _sphere;
 };
 
@@ -851,7 +851,7 @@ inline void spherelight(
   // compute probability for ωi
   ℝ3 const L = sl._sphere.T.pos()-hinfo.p;
   float const dist2 = L|L;
-  float const sr = (1.f-std::sqrtf(1.f-sl._sphere.size*sl._sphere.size/dist2));
+  float const sr = (1.f-std::sqrtf(1.f-sl.size*sl.size/dist2));
   info.prob = 0.5f/(π<float>*sr);
 
   // sample direction in projection of sphere light onto sphere
@@ -875,7 +875,7 @@ inline float probForSphereLight(cg::spherelight const &l, ray const &r)
   // compute probability if ray intersects
   ℝ3 const L = l._sphere.T.pos()-r.p;
   float const dist2 = L|L;
-  float const sr = (1.f-std::sqrtf(1.f-l._sphere.size*l._sphere.size/dist2));
+  float const sr = (1.f-std::sqrtf(1.f-l.size*l.size/dist2));
   float const prob = .5f/(π<float>*sr);
 
   hitinfo unused;
@@ -1156,7 +1156,11 @@ inline void loadSphereLight(
   linRGB radiance;
   loadℝ3(radiance.c, j.at("radiance"));
   loadTransform(s.T, j.at("transform"));
-  s.size = bra::column<3>(s.T.M,0).l2();
+  float const sx = bra::column<3>(s.T.M,0).l2();
+  float const sy = bra::column<3>(s.T.M,1).l2();
+  float const sz = bra::column<3>(s.T.M,2).l2();
+  assert(std::abs(sx-sy)<0.01);
+  assert(std::abs(sx-sz)<0.01); // check for uniform scaling
   std::string name = "emitter_"+radiance.toString();
   materialidx mat = mats.idxOf(name);
   if (mat==mats.size()) 
@@ -1165,6 +1169,7 @@ inline void loadSphereLight(
     mats.emplace_back(std::in_place_type<emitter>, m);
   }
   s.mat = mat;
+  light.size = sx;
   light.radiance = radiance;
   light._sphere = s;
 }
@@ -1217,12 +1222,6 @@ inline void loadSphere(sphere &s, json const &j, list<Material> const &mats)
   transform T;
   loadTransform(T, j.at("transform"));
   s.T = T;
-  float const sx = bra::column<3>(T.M,0).l2();
-  float const sy = bra::column<3>(T.M,1).l2();
-  float const sz = bra::column<3>(T.M,2).l2();
-  assert(std::abs(sx-sy)<0.01);
-  assert(std::abs(sx-sz)<0.01); // check for uniform scaling
-  s.size = sx;
   s.mat = mats.idxOf(j.at("material").get<std::string>());
 }
 

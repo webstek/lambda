@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file numli.hpp
 /// @author Kyle Webster
-/// @version 0.3
-/// @date 22 Nov 2025
+/// @version 0.4
+/// @date 6 Dec 2025
 /// @brief Numerics Library - @ref nl
 /// @details
 /// Collection of constants and core numerics
@@ -12,8 +12,10 @@
 // ** Includes ****************************************************************
 #include <numbers>
 #include <stdfloat>
+#include <cstdint>
 #include <cstring>
 #include <cassert>
+#include <concepts>
 // ****************************************************************************
 
 // ************************************
