@@ -455,7 +455,7 @@ struct spherelight : item
 using Light = std::variant<ambientlight, pointlight, dirlight, spherelight>;
 // ** end of lights ***********************************************************
 
-
+struct hitinfo;
 // ****************************************************************************
 /// @name materials
 enum class MaterialType {NONE, LAMBERTIAN, BLINN, MICROFACET};
@@ -512,13 +512,11 @@ struct blinn : item
     if (cos_i>0.f)
     { 
       ℝ3 const h = (i+o).normalized();
-      return fdcosθ(cos_i) + frcosθ(h|n,F)/(i|h); 
+      return fdcosθ(cos_i) + frcosθ(h|n,F)/max(1e-4f,i|h);
     } else 
     { 
-      ℝ3 const ht = -(η*i+o).normalized();
-      float const cos_it = std::abs(i|ht);
-      float const J_denom = (cos_it+η*cos_o)*(cos_it+η*cos_o);
-      return ftcosθ(ht|n,F)/J_denom;
+      ℝ3 const ht = -(i+η*o).normalized();
+      return ftcosθ(std::abs(ht|n),F);
     }
   }
   /// @brief returns p(i|diffuse sampled)
@@ -535,8 +533,8 @@ struct microfacet : item
 struct emitter : item
 {
   linRGB radiance;
-  constexpr linRGB Radiance(ℝ3 const &o, ℝ3 const &n) const
-    { return radiance*max(0.f,o|n); }
+  constexpr linRGB Radiance(ℝ3 const &o, hitinfo const &hinfo) const
+    { (void)o; (void)hinfo; return radiance; }
 };
 
 /// @brief Material interface
@@ -878,8 +876,7 @@ inline void spherelight(
   temp.z = std::sqrtf(dist2);
   float const shadowing = 
     intersect::scene(sc,{hinfo.p, ωi},temp,sl._sphere.obj) ? 0.f : 1.f;
-  float const cos_lnwi = std::sqrtf(1.f-min(1.f,sinθ*sinθ*dist2/r2));
-  info.mult = sl.radiance*shadowing*cos_lnwi;
+  info.mult = sl.radiance*shadowing;
 }
 /// @brief probability that a ray (direction from a hit point) could be sampled
 inline float probForSphereLight(cg::spherelight const &l, ray const &r)
@@ -1001,20 +998,20 @@ inline bool blinni(
     if (lobe<pp_spec*p_r)
     { // specular sample
       // p(sample)p(spec|sample)p(r|spec)p(i|r)
-      info.prob = pp_spec*p_r*b.blinnhProb(ω[2])*.25f/cos_o;
+      info.prob = pp_spec*p_r*b.blinnhProb(ω[2])*.25f/max(1e-4f,cos_o);
       info.val  = i_R;
-      info.mult = b.frcosθ(ω[2],F)/cos_o;
+      info.mult = b.frcosθ(ω[2],F)/max(1e-4f,cos_o);
       // frcosθ/p(i)
       info.weight = (b.Ks+b.Kt*F)*(b.α+2)/(pp_spec*p_r*std::abs(ω[2])*(b.α+1));
       return true;
     } else
     { // transmissive sample
-      float const cos_it = -h|i_T;
-      float const J = cos_it/((cos_it+η*cos_o)*(cos_it+η*cos_o));
+      float const cos_i = -h|i_T;
+      float const J = cos_i/((cos_i+η*cos_o)*(cos_i+η*cos_o));
       info.prob = pp_spec*p_t*b.blinnhProb(ω[2])*J;
       info.val  = i_T;
-      info.mult = b.ftcosθ(ω[2],F)*J/cos_it;
-      info.weight = b.Kt*(1-F)*(b.α+2)/(pp_spec*p_t*std::abs(ω[2])*(b.α+1)*cos_it);
+      info.mult = b.ftcosθ(ω[2],F);
+      info.weight = b.Kt*(1-F)*(b.α+2)*.5f/(pp_spec*p_t*std::abs(ω[2])*(b.α+1)*J);
       return true;
     }
   } else if (lobe<pp_spec+pp_d)
@@ -1039,24 +1036,26 @@ inline float probForBlinn(
   float p)
 {
   ℝ3 const n = hinfo.n();
-  float const cos_i = i|n;
-  float const cos_o = o|n;
+  float const ior = hinfo.front ? 1.f/b.ior : b.ior;
+  float const cos_in = i|n;
+  ℝ3 h;
+  if (cos_in>0.f) { h = (i+o).normalized(); }
+  else { h = -(i+ior*o).normalized(); } // always points to lower ior mat
+  float const cos_o = std::abs(o|h);
   float const F = b.fresnel(b.F0, cos_o);
   auto [p_r, p_t] = b.fresnelSplit(F);
-  if (cos_i>0.f)
+  if (cos_in>0.f)
   { // reflection/diffuse
-    ℝ3 const h = (i+o).normalized();
     // p(i) = p*(p(d)p(i|d)+p(spec)*p(r|spec)*p(i|r))
-    return p*(b.p_d*b.fdiProb(cos_i)+b.p_spec*p_r*b.blinnhProb(h|n)*.25f/cos_o);
+    return p*(b.p_d*b.fdiProb(cos_in)
+      + b.p_spec*p_r*b.blinnhProb(h|n)*.25f/max(1e-4f,cos_o));
   } else
   { // transmition
-    float const ior = hinfo.front ? 1.f/b.ior : b.ior;
-    float const cos2_it = 1.f-ior*ior*(1.f-cos_i*cos_i);
+    float const cos2_it = 1.f-ior*ior*(1.f-cos_o*cos_o);
     if (cos2_it < 0.f) { return 0.f; } // should be tir
     // p(i) = pp(spec)p(t|spec)p(i|t)
-    ℝ3 const h = (ior*i+o).normalized();
-    float const cos_it = std::sqrtf(cos2_it);
-    float const J = cos2_it/((cos_it+ior*cos_o)*(cos_it+ior*cos_o));
+    float const cos_i = std::abs(i|h);
+    float const J = cos_i/((cos_i+ior*cos_o)*(cos_i+ior*cos_o));
     return p*b.p_spec*p_t*b.blinnhProb(h|n)*J;
   }
 }

@@ -197,12 +197,13 @@ template<uint32_t n, arithmetic T = std::float64_t> struct ℝn
   constexpr ℝn() {}
 
   /// @name member functions
-  constexpr T l2() const 
-  {
+  constexpr T len2() const 
+  { 
     T sum=T(0); 
-    for(uint32_t i=0;i<n;i++) { sum+=elem[i]*elem[i]; }
-    return std::sqrt(sum);
+    for (uint32_t i=0;i<n;i++) { sum+=elem[i]*elem[i]; }
+    return sum;
   }
+  constexpr T l2() const { return std::sqrt(len2()); }
   constexpr void normalize()
     { T len=l2(); for (uint32_t i=0;i<n;i++) elem[i]/=len; }
   constexpr ℝn normalized() const {ℝn x(this);x.normalize();return ℝn(x.elem);}

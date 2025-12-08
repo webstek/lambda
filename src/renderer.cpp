@@ -1,7 +1,7 @@
 // ****************************************************************************
 /// @file renderer.cpp
 /// @author Kyle Webster
-/// @version 0.5
+/// @version 0.3
 /// @date 3 Dec 2025
 /// @brief Renderer implementation
 // ****************************************************************************
@@ -11,7 +11,7 @@ using namespace nl::cg;
 using ℝ3 = nl::ℝ3;
 // ************************************
 constexpr uint64_t MAX_SCATTERINGS = 128;
-constexpr uint64_t SPP   = 64;
+constexpr uint64_t SPP   = 8192;
 constexpr float SAMPLE_P = 0.95;
 // ************************************
 
@@ -67,7 +67,7 @@ linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, uint64_t scatters) const
   // check if path hit a light (emitter material)
   Material const &mat = scene.materials[hinfo.mat];
   if (std::holds_alternative<emitter>(mat)) 
-    { return std::get<emitter>(mat).Radiance(o,n); }
+    { return std::get<emitter>(mat).Radiance(o,hinfo); }
 
   // hit an object, scatter if less than max scattering
   if (scatters > MAX_SCATTERINGS) return {0.f,0.f,0.f};
