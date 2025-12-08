@@ -11,7 +11,7 @@ using namespace nl::cg;
 using ℝ3 = nl::ℝ3;
 // ************************************
 constexpr uint64_t MAX_SCATTERINGS = 128;
-constexpr uint64_t SPP   = 8192;
+constexpr uint64_t SPP   = 2048;
 constexpr float SAMPLE_P = 0.95;
 // ************************************
 

@@ -512,7 +512,7 @@ struct blinn : item
     if (cos_i>0.f)
     { 
       ℝ3 const h = (i+o).normalized();
-      return fdcosθ(cos_i) + frcosθ(h|n,F)/max(1e-4f,i|h);
+      return fdcosθ(cos_i) + frcosθ(h|n,F);
     } else 
     { 
       ℝ3 const ht = -(i+η*o).normalized();
@@ -998,20 +998,18 @@ inline bool blinni(
     if (lobe<pp_spec*p_r)
     { // specular sample
       // p(sample)p(spec|sample)p(r|spec)p(i|r)
-      info.prob = pp_spec*p_r*b.blinnhProb(ω[2])*.25f/max(1e-4f,cos_o);
+      info.prob = pp_spec*p_r*b.blinnhProb(ω[2])*.25f;
       info.val  = i_R;
-      info.mult = b.frcosθ(ω[2],F)/max(1e-4f,cos_o);
+      info.mult = b.frcosθ(ω[2],F);
       // frcosθ/p(i)
       info.weight = (b.Ks+b.Kt*F)*(b.α+2)/(pp_spec*p_r*std::abs(ω[2])*(b.α+1));
       return true;
     } else
     { // transmissive sample
-      float const cos_i = -h|i_T;
-      float const J = cos_i/((cos_i+η*cos_o)*(cos_i+η*cos_o));
-      info.prob = pp_spec*p_t*b.blinnhProb(ω[2])*J;
+      info.prob = pp_spec*p_t*b.blinnhProb(ω[2])*.25f;
       info.val  = i_T;
       info.mult = b.ftcosθ(ω[2],F);
-      info.weight = b.Kt*(1-F)*(b.α+2)*.5f/(pp_spec*p_t*std::abs(ω[2])*(b.α+1)*J);
+      info.weight = b.Kt*(1-F)*(b.α+2)/(pp_spec*p_t*std::abs(ω[2]));
       return true;
     }
   } else if (lobe<pp_spec+pp_d)
@@ -1047,16 +1045,13 @@ inline float probForBlinn(
   if (cos_in>0.f)
   { // reflection/diffuse
     // p(i) = p*(p(d)p(i|d)+p(spec)*p(r|spec)*p(i|r))
-    return p*(b.p_d*b.fdiProb(cos_in)
-      + b.p_spec*p_r*b.blinnhProb(h|n)*.25f/max(1e-4f,cos_o));
+    return p*(b.p_d*b.fdiProb(cos_in) + b.p_spec*p_r*b.blinnhProb(h|n)*.25f);
   } else
   { // transmition
     float const cos2_it = 1.f-ior*ior*(1.f-cos_o*cos_o);
     if (cos2_it < 0.f) { return 0.f; } // should be tir
     // p(i) = pp(spec)p(t|spec)p(i|t)
-    float const cos_i = std::abs(i|h);
-    float const J = cos_i/((cos_i+ior*cos_o)*(cos_i+ior*cos_o));
-    return p*b.p_spec*p_t*b.blinnhProb(h|n)*J;
+    return p*b.p_spec*p_t*b.blinnhProb(h|n)*.25f;
   }
 }
 
