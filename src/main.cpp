@@ -14,7 +14,7 @@ int main(int argc, char **argv)
   
   λ.renderer.loadScene("scenes/box.nls");
   λ.renderer.render();
-  λ.renderer.saveImage("render/1spp.png");
+  λ.renderer.saveImage("render/box-64.png");
   
   return 0;
 }

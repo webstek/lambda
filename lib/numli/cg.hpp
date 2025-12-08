@@ -510,8 +510,16 @@ struct blinn : item
     float const cos_o = o|n;
     float const F = fresnel(F0, cos_o);
     if (cos_i>0.f)
-      { return fdcosθ(cos_i) + frcosθ((i+o).normalized()|n,F); } 
-    else { return ftcosθ(-(η*i+o).normalized()|n,F); }
+    { 
+      ℝ3 const h = (i+o).normalized();
+      return fdcosθ(cos_i) + frcosθ(h|n,F)/(i|h); 
+    } else 
+    { 
+      ℝ3 const ht = -(η*i+o).normalized();
+      float const cos_it = std::abs(i|ht);
+      float const J_denom = (cos_it+η*cos_o)*(cos_it+η*cos_o);
+      return ftcosθ(ht|n,F)/J_denom;
+    }
   }
   /// @brief returns p(i|diffuse sampled)
   constexpr float fdiProb(float cos_i) const 
@@ -527,6 +535,8 @@ struct microfacet : item
 struct emitter : item
 {
   linRGB radiance;
+  constexpr linRGB Radiance(ℝ3 const &o, ℝ3 const &n) const
+    { return radiance*max(0.f,o|n); }
 };
 
 /// @brief Material interface
@@ -640,7 +650,7 @@ constexpr bool sphere(cg::sphere const &s, ray const &w_ray, hitinfo &hinfo)
 
   // descriminant of ray-sphere intersection equation
   float const a = l_ray.u|l_ray.u;
-  float const b = 2*(l_ray.p|w_ray.u);
+  float const b = 2*(l_ray.p|l_ray.u);
   float const c = (l_ray.p|l_ray.p)-1.f;
   float const Δ = b*b - 4*a*c;
   if (Δ < .1f*BIAS) [[likely]] { return false; }
@@ -656,7 +666,7 @@ constexpr bool sphere(cg::sphere const &s, ray const &w_ray, hitinfo &hinfo)
 
   // ray hits
   ℝ3 const p = l_ray(t);
-  ℝ3 const n = s.T.toWorld(normal(p));
+  ℝ3 const n = s.T.toWorld(normal(p)).normalized();
   bool const front = (n|w_ray.u) < 0.f;
 
   // (θ,φ) parameterization for tangent (and bitangent)
@@ -851,7 +861,8 @@ inline void spherelight(
   // compute probability for ωi
   ℝ3 const L = sl._sphere.T.pos()-hinfo.p;
   float const dist2 = L|L;
-  float const sr = (1.f-std::sqrtf(1.f-sl.size*sl.size/dist2));
+  float const r2 = sl.size*sl.size;
+  float const sr = 1.f-std::sqrtf(1.f-r2/dist2);
   info.prob = 0.5f/(π<float>*sr);
 
   // sample direction in projection of sphere light onto sphere
@@ -867,7 +878,8 @@ inline void spherelight(
   temp.z = std::sqrtf(dist2);
   float const shadowing = 
     intersect::scene(sc,{hinfo.p, ωi},temp,sl._sphere.obj) ? 0.f : 1.f;
-  info.mult = sl.radiance*shadowing;
+  float const cos_lnwi = std::sqrtf(1.f-min(1.f,sinθ*sinθ*dist2/r2));
+  info.mult = sl.radiance*shadowing*cos_lnwi;
 }
 /// @brief probability that a ray (direction from a hit point) could be sampled
 inline float probForSphereLight(cg::spherelight const &l, ray const &r)
@@ -989,20 +1001,20 @@ inline bool blinni(
     if (lobe<pp_spec*p_r)
     { // specular sample
       // p(sample)p(spec|sample)p(r|spec)p(i|r)
-      info.prob = pp_spec*p_r*b.blinnhProb(ω[2])*.25f;
+      info.prob = pp_spec*p_r*b.blinnhProb(ω[2])*.25f/cos_o;
       info.val  = i_R;
-      info.mult = b.frcosθ(ω[2],F);
+      info.mult = b.frcosθ(ω[2],F)/cos_o;
       // frcosθ/p(i)
       info.weight = (b.Ks+b.Kt*F)*(b.α+2)/(pp_spec*p_r*std::abs(ω[2])*(b.α+1));
       return true;
     } else
     { // transmissive sample
-      // float const cos_it = -h|i_T;
-      // float const J = cos_o/((cos_it+η*cos_o)*(cos_it+η*cos_o));
-      info.prob = pp_spec*p_t*b.blinnhProb(ω[2])*.25f;
+      float const cos_it = -h|i_T;
+      float const J = cos_it/((cos_it+η*cos_o)*(cos_it+η*cos_o));
+      info.prob = pp_spec*p_t*b.blinnhProb(ω[2])*J;
       info.val  = i_T;
-      info.mult = b.ftcosθ(ω[2], F);
-      info.weight = b.Kt*(1-F)*(b.α+2)/(pp_spec*p_t*std::abs(ω[2])*(b.α+1));
+      info.mult = b.ftcosθ(ω[2],F)*J/cos_it;
+      info.weight = b.Kt*(1-F)*(b.α+2)/(pp_spec*p_t*std::abs(ω[2])*(b.α+1)*cos_it);
       return true;
     }
   } else if (lobe<pp_spec+pp_d)
@@ -1035,14 +1047,17 @@ inline float probForBlinn(
   { // reflection/diffuse
     ℝ3 const h = (i+o).normalized();
     // p(i) = p*(p(d)p(i|d)+p(spec)*p(r|spec)*p(i|r))
-    return p*(b.p_d*b.fdiProb(cos_i)+b.p_spec*p_r*b.blinnhProb(h|n)*.25f);
+    return p*(b.p_d*b.fdiProb(cos_i)+b.p_spec*p_r*b.blinnhProb(h|n)*.25f/cos_o);
   } else
   { // transmition
     float const ior = hinfo.front ? 1.f/b.ior : b.ior;
-    if ((1.f-ior*ior*(1.f-cos_i*cos_i)) < 0.f) { return 0.f; } // should be tir
+    float const cos2_it = 1.f-ior*ior*(1.f-cos_i*cos_i);
+    if (cos2_it < 0.f) { return 0.f; } // should be tir
     // p(i) = pp(spec)p(t|spec)p(i|t)
     ℝ3 const h = (ior*i+o).normalized();
-    return p*b.p_spec*p_t*b.blinnhProb(h|n)*.25f;
+    float const cos_it = std::sqrtf(cos2_it);
+    float const J = cos2_it/((cos_it+ior*cos_o)*(cos_it+ior*cos_o));
+    return p*b.p_spec*p_t*b.blinnhProb(h|n)*J;
   }
 }
 
@@ -1234,11 +1249,19 @@ inline void loadPlane(plane &p, json const &j, list<Material> const &mats)
 }
 
 /// @todo
-inline void loadTriMesh(trimesh &m, json const &j, list<Material> const &mats);
+inline void loadTriMesh(
+  trimesh &m, list<Mesh> &meshes, json const &j, list<Material> const &mats)
+{
+  transform T;
+  loadTransform(T, j.at("transform"));
+  m.T = T;
+  m.mat = mats.idxOf(j.at("material").get<std::string>());
+}
 
 /// @brief loads all scene objects
 inline void loadObjects(
-  list<Object> &objs, 
+  list<Object> &objs,
+  list<Mesh> &meshes,
   json const &j, 
   list<Material> const &mats)
 {
@@ -1252,7 +1275,7 @@ inline void loadObjects(
     {
     case ObjectType::GROUP:
       /// @bug does not apply transformation of group to children
-      {loadObjects(objs, j_obj, mats); break;}
+      {loadObjects(objs, meshes, j_obj.at("children"), mats); break;}
     case ObjectType::SPHERE: 
     {
       sphere s; 
@@ -1271,7 +1294,15 @@ inline void loadObjects(
       objs.emplace_back(std::in_place_type<plane>, p); 
       break;
     }
-    case ObjectType::TRIMESH: break;
+    case ObjectType::TRIMESH:
+    {
+      trimesh m;
+      m.name=name;
+      loadTriMesh(m, meshes, j_obj, mats);
+      m.obj = objs.size();
+      objs.emplace_back(std::in_place_type<trimesh>, m);
+      break;
+    }
     }
   }
 }
@@ -1377,7 +1408,7 @@ inline bool loadNLS(scene &scene, std::string fpath)
 
   loadCamera(scene.cam, j.at("camera"));
   loadMaterials(scene.materials, j.at("materials"));
-  loadObjects(scene.objects, j.at("objects"), scene.materials);
+  loadObjects(scene.objects, scene.meshes, j.at("objects"), scene.materials);
   loadLights(scene, j.at("lights"));
   return true;
 }

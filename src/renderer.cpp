@@ -11,7 +11,7 @@ using namespace nl::cg;
 using ℝ3 = nl::ℝ3;
 // ************************************
 constexpr uint64_t MAX_SCATTERINGS = 128;
-constexpr uint64_t SPP   = 1;
+constexpr uint64_t SPP   = 64;
 constexpr float SAMPLE_P = 0.95;
 // ************************************
 
@@ -61,15 +61,16 @@ linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, uint64_t scatters) const
   hitinfo hinfo;
   if (!intersect::scene(scene, r, hinfo)) { return {0.f,0.f,0.f}; } // misses
   
+  ℝ3 const o = -r.u.normalized();
+  ℝ3 const n = hinfo.n();
+
   // check if path hit a light (emitter material)
   Material const &mat = scene.materials[hinfo.mat];
   if (std::holds_alternative<emitter>(mat)) 
-    { return std::get<emitter>(mat).radiance; }
+    { return std::get<emitter>(mat).Radiance(o,n); }
 
   // hit an object, scatter if less than max scattering
   if (scatters > MAX_SCATTERINGS) return {0.f,0.f,0.f};
-  ℝ3 const o = -r.u.normalized();
-  ℝ3 const n = hinfo.n();
 
   // ** Light IS estimate *******************************
   // sample lights in scene: 
@@ -92,7 +93,6 @@ linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, uint64_t scatters) const
   // Light IS estimate
   linRGB const L_IS = si_i_L.mult * coef / (si_i_L.prob*si_l.prob);
   // ** end of L IS estimate ****************************
-  return L_IS;
 
   // ** Material IS estimate ****************************
   // sample material:
