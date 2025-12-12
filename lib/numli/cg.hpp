@@ -167,7 +167,9 @@ template <uint32_t n> struct coefficientλ
   float const sup=720;
   float const Δ=(sup-inf)/(n-1);
   bra::ℝn<n,float> v;
+  constexpr coefficientλ() : v(0.f) {}
   constexpr coefficientλ(float x) {for (uint32_t i=0;i<n;i++) {v[i]=x;}}
+  constexpr coefficientλ(coefficientλ const& s) : v(s.v) {}
   /// @warning assumes samples are in sorted order
   coefficientλ(sampledλ const &s)
   {
@@ -198,6 +200,23 @@ template <uint32_t n> struct coefficientλ
     for (uint32_t i=0;i<n;i++) { sum+=v[i]*s.v[i]; }
     return sum*Δ;
   }
+  constexpr float operator()(float l) const
+  { // interpolates spectrum coefficients for given value
+    if (l<=inf) return v[0];
+    if (l>=sup) return v[n-1];
+    float x = (l-inf)/Δ;
+    uint32_t i = static_cast<uint32_t>(x);
+    float t=x-i;
+    return (1.f-t)*v[i] + t*v[i+1];
+  }
+  coefficientλ& operator=(coefficientλ&& o) noexcept 
+    { for (uint32_t i=0;i<n;i++) {v[i]=std::move(o.v[i]);} return *this; }
+  std::string toString() const 
+  {
+    std::string s=""; 
+    for (uint32_t i=0;i<n;i++) {s+=std::format("{:.2f}",v.[i]);} 
+    return s;
+  }
 };
 
 /// @brief Sampled Spectrum - values (λ,v) 
@@ -225,6 +244,7 @@ inline coefficientλ<Nλ> CMF_X(sampledλ("data/xyz_x.csv"));
 inline coefficientλ<Nλ> CMF_Y(sampledλ("data/xyz_y.csv"));
 inline coefficientλ<Nλ> CMF_Z(sampledλ("data/xyz_z.csv"));
 
+constexpr XYZ λ2XYZ(float l) { return {CMF_X(l), CMF_Y(l), CMF_Z(l)};}
 constexpr linRGB coefλ2linRGB(coefficientλ<Nλ> const &spec)
   { return XYZ2linRGB({spec|CMF_X,spec|CMF_Y,spec|CMF_Z}); }
 // ** end of spectrums ****************
@@ -271,6 +291,7 @@ struct ray
 {
   ℝ3 p;
   ℝ3 u;
+  float λ;
   ray() {}
   ray(ℝ3 const &p, ℝ3 const &u) : p(p), u(u) {}
   ray(ℝ4 const &p, ℝ4 const &u) : 
@@ -524,7 +545,7 @@ constexpr LightType str2light(std::string s)
 
 struct ambientlight : item
 {
-  linRGB irradiance;
+  coefficientλ<Nλ> irradiance;
 };
 struct pointlight : item
 {
@@ -538,7 +559,7 @@ struct dirlight : item
 };
 struct spherelight : item
 {
-  linRGB radiance;
+  coefficientλ<Nλ> radiance;
   float size;
   sphere _sphere;
 };
@@ -561,22 +582,23 @@ constexpr MaterialType str2mat(std::string const &s)
 
 struct lambertian : item
 {
-  linRGB albedo;
-  constexpr linRGB BRDFcosθ(ℝ3 const &i, ℝ3 const &n) const 
-    { return albedo*inv_π<float>*nl::max(0.f,i|n); }
+  coefficientλ<Nλ> albedo;
+  constexpr float BRDFcosθ(float l, ℝ3 const &i, ℝ3 const &n) const 
+    { return albedo(l)*inv_π<float>*nl::max(0.f,i|n); }
 };
 struct blinn : item
 {
-  linRGB Kd, Ks, Kt, Le;
-  float α, ior, p_d, p_spec, w_r, w_t, F0;
+  coefficientλ<Nλ> Kd, Ks, Kt, Le, ior;
+  float α, p_d, p_spec, w_r, w_t;
   constexpr void init() 
   { 
-    p_d    = Kd.luma();
-    w_r    = Ks.luma();
-    w_t    = Kt.luma();
+    p_d    = Kd|Kd;
+    w_r    = Ks|Ks;
+    w_t    = Kt|Kt;
     p_spec = 1.f-p_d;
-    F0 = (ior*ior-2.f*ior+1.f)/(ior*ior+2.f*ior+1.f);
   }
+  constexpr float F0(float ior) const
+    { return (ior*ior-2.f*ior+1.f)/(ior*ior+2.f*ior+1.f); }
   constexpr float fresnel(float F0, float cos_i) const 
     { return F0+(1.f-F0)*std::pow(1.f-cos_i,5); }
   constexpr std::pair<float,float> fresnelSplit(float F) const
@@ -588,27 +610,27 @@ struct blinn : item
     p_t/=tot;
     return {p_r, p_t};
   }
-  constexpr linRGB fdcosθ(float cos_i) const 
-    { return Kd*inv_π<float>*nl::max(0.f,cos_i); }
-  constexpr linRGB frcosθ(float cos_h, float F) const
-    { return (Ks+F*Kt)*(α+2)*.125f*inv_π<float>*std::pow(cos_h,α); }
-  constexpr linRGB ftcosθ(float cos_h_t, float F) const
-    { return Kt*(1-F)*(α+2)*.125f*inv_π<float>*std::pow(cos_h_t,α); }
-  constexpr linRGB BSDFcosθ(
-    ℝ3 const &i, ℝ3 const &o, ℝ3 const &n, bool front) const 
+  constexpr float fdcosθ(float l, float cos_i) const 
+    { return Kd(l)*inv_π<float>*nl::max(0.f,cos_i); }
+  constexpr float frcosθ(float l, float cos_h, float F) const
+    { return (Ks(l)+F*Kt(l))*(α+2)*.125f*inv_π<float>*std::pow(cos_h,α); }
+  constexpr float ftcosθ(float l, float cos_h_t, float F) const
+    { return Kt(l)*(1-F)*(α+2)*.125f*inv_π<float>*std::pow(cos_h_t,α); }
+  constexpr float BSDFcosθ(
+    float l, ℝ3 const &i, ℝ3 const &o, ℝ3 const &n, bool front) const 
   { 
-    float const η = front ? 1.f/ior : ior;
+    float const η = front ? 1.f/ior(l) : ior(l);
     float const cos_i = i|n;
     float const cos_o = o|n;
-    float const F = fresnel(F0, cos_o);
+    float const F = fresnel(F0(η), cos_o);
     if (cos_i>0.f)
     { 
       ℝ3 const h = (i+o).normalized();
-      return fdcosθ(cos_i) + frcosθ(h|n,F);
+      return fdcosθ(l, cos_i) + frcosθ(l, h|n,F);
     } else 
     { 
       ℝ3 const ht = -(i+η*o).normalized();
-      return ftcosθ(std::abs(ht|n),F);
+      return ftcosθ(l, std::abs(ht|n),F);
     }
   }
   /// @brief returns p(i|diffuse sampled)
@@ -624,16 +646,17 @@ struct microfacet : item
 };
 struct emitter : item
 {
-  linRGB radiance;
-  constexpr linRGB Radiance(ℝ3 const &o, hitinfo const &hinfo) const
-    { (void)o; (void)hinfo; return radiance; }
+  coefficientλ<Nλ> radiance;
+  constexpr float Radiance(float l, ℝ3 const &o, hitinfo const &hinfo) const
+    { (void)o; (void)hinfo; return radiance(l); }
 };
 
 /// @brief Material interface
 using Material = std::variant<lambertian, blinn, microfacet, emitter>;
 
 /// @brief Evaluation of BSDF times geometry term
-constexpr linRGB BxDFcosθ(
+constexpr float BxDFcosθ(
+  float l,
   Material const &mat, 
   ℝ3 const &i, 
   ℝ3 const &o, 
@@ -641,9 +664,9 @@ constexpr linRGB BxDFcosθ(
   bool front)
 {
   return std::visit(Overload{
-    [&](lambertian const &mat){return mat.BRDFcosθ(i,n);},
-    [&](blinn const &mat)     {return mat.BSDFcosθ(i,o,n,front);},
-    [](auto const &){return linRGB(1.f,0.f,0.f);}},
+    [&](lambertian const &mat){return mat.BRDFcosθ(l,i,n);},
+    [&](blinn const &mat)     {return mat.BSDFcosθ(l,i,o,n,front);},
+    [](auto const &){return 0.f;}},
     mat);
 }
 
@@ -981,6 +1004,15 @@ template<typename T, typename S=T> struct info
   S weight;   ///< mult/prob
 };
 
+/// @brief samples a wavelength λ from the spectrum s
+template <uint32_t n>
+inline void spectrum(cg::coefficientλ<n> const &s, info<float> &info, RNG &rng)
+{
+  float const Ω = s.sup-s.inf;
+  info.val = s.inf+Ω*rng.flt();
+  info.prob = 1./Ω;
+}
+
 /// @brief ray from camera c through SS (s[0],s[1]) from disk (s[2],s[3])
 inline void camera(cg::camera const &c, ℝ2 const &uv, info<ray> &info, RNG &rng)
 {
@@ -1007,10 +1039,11 @@ inline void lights(
 
 /// @brief uniformly samples the solid angle of a sphere light from a point
 inline void spherelight(
+  float l,
   cg::spherelight const &sl, 
   hitinfo const &hinfo, 
   scene const &sc,
-  info<ℝ3,linRGB> &info, 
+  info<ℝ3,float> &info, 
   RNG &rng) 
 {
   // compute probability for ωi
@@ -1033,33 +1066,34 @@ inline void spherelight(
   temp.z = std::sqrtf(dist2);
   float const shadowing = intersect::scene(
     sc, {hinfo.p+.05f*hinfo.n(),ωi}, temp, sl._sphere.obj) ? 0.f : 1.f;
-  info.mult = sl.radiance*shadowing;
+  info.mult = sl.radiance(l)*shadowing;
 }
 /// @brief probability that a ray (direction from a hit point) could be sampled
-inline float probForSphereLight(cg::spherelight const &l, ray const &r)
+inline float probForSphereLight(cg::spherelight const &sl, ray const &r)
 {
   // compute probability if ray intersects
-  ℝ3 const L = l._sphere.T.pos()-r.p;
+  ℝ3 const L = sl._sphere.T.pos()-r.p;
   float const dist2 = L|L;
-  float const sr = (1.f-std::sqrtf(1.f-l.size*l.size/dist2));
+  float const sr = (1.f-std::sqrtf(1.f-sl.size*sl.size/dist2));
   float const prob = .5f/(π<float>*sr);
 
   hitinfo unused;
-  return intersect::sphere(l._sphere, r, unused) ? prob : 0.f;
+  return intersect::sphere(sl._sphere, r, unused) ? prob : 0.f;
 }
 
 /// @brief light sampling dispatch
 constexpr void light(
-  Light const *l, 
+  float l,
+  Light const *light, 
   hitinfo const &hinfo, 
   scene const &sc,
-  info<ℝ3,linRGB> &info,
+  info<ℝ3,float> &info,
   RNG &rng)
 {
   std::visit(Overload{
-    [&](cg::spherelight const &sl){spherelight(sl,hinfo,sc,info,rng);},
+    [&](cg::spherelight const &sl){spherelight(l,sl,hinfo,sc,info,rng);},
     [](auto const &){}
-  }, *l);
+  }, *light);
 }
 
 /// @brief probability of a light generating a direction as a sample
@@ -1080,9 +1114,10 @@ constexpr float probForLight(
 
 /// @brief cosine weighted sample of lambertian brdf
 inline bool lambertiani(
+  float l,
   cg::lambertian const &mat,
   hitinfo const &hinfo,
-  info<ℝ3,linRGB> &info,
+  info<ℝ3,float> &info,
   RNG &rng,
   float p)
 {
@@ -1098,8 +1133,8 @@ inline bool lambertiani(
   info.val = i;
 
   // evaluate BRDFcosθ
-  info.mult = mat.BRDFcosθ(i,hinfo.n());
-  info.weight = mat.albedo/p;
+  info.mult = mat.BRDFcosθ(l,i,hinfo.n());
+  info.weight = mat.albedo(l)/p;
   return true;
 }
 /// @brief probability of lambertian generating the sample direction
@@ -1123,10 +1158,11 @@ constexpr ℝ3 blinnh(float α, float x0, float x1)
 
 /// @brief samples blinn material for an incoming direction
 inline bool blinni(
+  float l,
   cg::blinn const &b, 
   hitinfo const &hinfo,
   ℝ3 const &o,
-  info<ℝ3,linRGB> &info, 
+  info<ℝ3,float> &info, 
   RNG &rng, 
   float p)
 {
@@ -1138,7 +1174,7 @@ inline bool blinni(
   if (lobe<pp_spec)
   { // specular sample
     // sample half vector, split on Fresnel
-    float const η = hinfo.front ? 1.f/b.ior : b.ior;
+    float const η = hinfo.front ? 1.f/b.ior(l) : b.ior(l);
     ℝ3 ω, h, i_R, i_T;
     ω = blinnh(b.α,rng.flt(),rng.flt());
     if (!hinfo.front) { ω[2]*=-1; } // flip half vector to outgoing hemisphere
@@ -1148,7 +1184,7 @@ inline bool blinni(
     
     /// @todo, compare with transmitted Fresnel split
     float const cos_o = o|h;
-    float F = b.fresnel(b.F0,cos_o);
+    float F = b.fresnel(b.F0(l),cos_o);
     if (i_T[0]==0.f) { F=1.f; } // TIR, all reflection
     auto [p_r, p_t] = b.fresnelSplit(F);
 
@@ -1157,16 +1193,16 @@ inline bool blinni(
       // p(sample)p(spec|sample)p(r|spec)p(i|r)
       info.prob = pp_spec*p_r*b.blinnhProb(ω[2])*.25f;
       info.val  = i_R;
-      info.mult = b.frcosθ(ω[2],F);
+      info.mult = b.frcosθ(l,ω[2],F);
       // frcosθ/p(i)
-      info.weight = (b.Ks+b.Kt*F)*(b.α+2)/(pp_spec*p_r*std::abs(ω[2])*(b.α+1));
+      info.weight = (b.Ks(l)+b.Kt(l)*F)*(b.α+2)/(pp_spec*p_r*std::abs(ω[2])*(b.α+1));
       return true;
     } else
     { // transmissive sample
       info.prob = pp_spec*p_t*b.blinnhProb(ω[2])*.25f;
       info.val  = i_T;
-      info.mult = b.ftcosθ(ω[2],F);
-      info.weight = b.Kt*(1-F)*(b.α+2)/(pp_spec*p_t*std::abs(ω[2]));
+      info.mult = b.ftcosθ(l,ω[2],F);
+      info.weight = b.Kt(l)*(1-F)*(b.α+2)/(pp_spec*p_t*std::abs(ω[2]));
       return true;
     }
   } else if (lobe<pp_spec+pp_d)
@@ -1176,14 +1212,15 @@ inline bool blinni(
     ℝ3 const i = hinfo.F.toBasis(dir);
     info.prob = pp_d*b.fdiProb(dir[2]);
     info.val = i;
-    info.mult = b.fdcosθ(dir[2]);
-    info.weight = b.Kd/pp_d;
+    info.mult = b.fdcosθ(l,dir[2]);
+    info.weight = b.Kd(l)/pp_d;
     return true;
   }
   return false;
 }
 /// @brief probability of blinn generating the sample direction
 inline float probForBlinn(
+  float l,
   blinn const &b, 
   hitinfo const &hinfo, 
   ℝ3 const &o,
@@ -1191,13 +1228,13 @@ inline float probForBlinn(
   float p)
 {
   ℝ3 const n = hinfo.n();
-  float const ior = hinfo.front ? 1.f/b.ior : b.ior;
+  float const ior = hinfo.front ? 1.f/b.ior(l) : b.ior(l);
   float const cos_in = i|n;
   ℝ3 h;
   if (cos_in>0.f) { h = (i+o).normalized(); }
   else { h = -(i+ior*o).normalized(); } // always points to lower ior mat
   float const cos_o = std::abs(o|h);
-  float const F = b.fresnel(b.F0, cos_o);
+  float const F = b.fresnel(b.F0(l), cos_o);
   auto [p_r, p_t] = b.fresnelSplit(F);
   if (cos_in>0.f)
   { // reflection/diffuse
@@ -1215,27 +1252,33 @@ inline float probForBlinn(
 
 /// @brief material incoming light direction sampling dispatch
 constexpr bool materiali(
+  float l,
   Material const *mat,
   hitinfo const &hinfo,
   ℝ3 const &o,
-  info<ℝ3,linRGB> &info,
+  info<ℝ3,float> &info,
   RNG &rng,
   float p)
 {
   return std::visit(Overload{
-      [&](cg::lambertian const &l){return lambertiani(l,hinfo,info,rng,p);},
-      [&](cg::blinn const &b){return blinni(b,hinfo,o,info,rng,p);},
+      [&](cg::lambertian const &lm){return lambertiani(l,lm,hinfo,info,rng,p);},
+      [&](cg::blinn const &b){return blinni(l,b,hinfo,o,info,rng,p);},
       [](auto const &){return false;}
     }, *mat);
 }
 
 /// @brief material sample evaluation dispatch 
 constexpr float probForMateriali(
-  Material const *mat, hitinfo const &hinfo, ℝ3 const &i, ℝ3 const &o, float p)
+  float l,
+  Material const *mat, 
+  hitinfo const &hinfo, 
+  ℝ3 const &i, 
+  ℝ3 const &o, 
+  float p)
 {
   return std::visit(Overload{
       [&](cg::lambertian const &){return probForLambertian(hinfo,i,o,p);},
-      [&](cg::blinn const &m){return probForBlinn(m,hinfo,i,o,p);},
+      [&](cg::blinn const &m){return probForBlinn(l,m,hinfo,i,o,p);},
       [](auto const&){return 0.f;}
     }, *mat);
 }
@@ -1273,6 +1316,11 @@ inline void loadTransform(transform &T, json const &j)
   auto translation = transform::translate(_translate);
   T = scaling << rotation << translation;
 }
+inline void loadSpectrum(coefficientλ<Nλ> &s, json const &j)
+{
+  if (j.is_string()) {s=sampledλ(j.get<std::string>());}
+  if (j.is_number()) {s=j.get<float>();}
+}
 // ************************************
 
 // ************************************
@@ -1288,7 +1336,7 @@ inline void loadCamera(camera &cam, json const &j)
   load(width, j.at("width"));
   load(fov, j.at("fov"));
   try { load(ar, j.at("ar")); } catch(...) { ar=1.7778f; } // default 16:9
-  try { load(dof, j.at("f")); } catch(...) { dof=0.f; }
+  try { load(dof, j.at("dof")); } catch(...) { dof=0.f; }
   try { load(focal_dist, j.at("f")); } catch(...) { focal_dist=1.f; }
   cam.fov = fov;
   cam.dof = dof;
@@ -1308,7 +1356,7 @@ inline void loadCamera(camera &cam, json const &j)
 /// @name light loading
 
 inline void loadAmbientLight(ambientlight &light, json const &j) 
-  {linRGB irrad; loadℝ3(irrad.c, j.at("irradiance")); light.irradiance = irrad;}
+  {loadSpectrum(light.irradiance, j.at("irradiance"));}
 /// @todo
 inline void loadPointLight(pointlight &light, json const &j);
 /// @todo
@@ -1319,24 +1367,22 @@ inline void loadSphereLight(
   list<Material> &mats)
 {
   sphere s;
-  linRGB radiance;
-  loadℝ3(radiance.c, j.at("radiance"));
+  loadSpectrum(light.radiance, j.at("radiance"));
   loadTransform(s.T, j.at("transform"));
   float const sx = bra::column<3>(s.T.M,0).l2();
   float const sy = bra::column<3>(s.T.M,1).l2();
   float const sz = bra::column<3>(s.T.M,2).l2();
   assert(std::abs(sx-sy)<0.01);
   assert(std::abs(sx-sz)<0.01); // check for uniform scaling
-  std::string name = "emitter_"+radiance.toString();
+  std::string name = "emitter_"+light.radiance.toString();
   materialidx mat = mats.idxOf(name);
   if (mat==mats.size()) 
   {
-    emitter m = {name, radiance}; 
+    emitter m = {name, light.radiance}; 
     mats.emplace_back(std::in_place_type<emitter>, m);
   }
   s.mat = mat;
   light.size = sx;
-  light.radiance = radiance;
   light._sphere = s;
 }
 /// @todo point and direction light loading
@@ -1547,28 +1593,18 @@ inline void loadObjects(
 
 inline void loadLambertian(lambertian &m, json const &j)
 {
-  linRGB albedo;
-  loadℝ3(albedo.c, j.at("albedo"));
-  m.albedo = albedo;
+  loadSpectrum(m.albedo, j.at("albedo"));
 }
 inline void loadBlinn(blinn &m, json const &j)
 {
-  linRGB Kd, Ks, Kt, Le, reflect, transmit;
-  float alpha, ior;
-  try {loadℝ3(Kd.c, j.at("Kd"));} catch(...) {Kd.c = 0.f;}
-  try {loadℝ3(Ks.c, j.at("Ks"));} catch(...) {Ks.c = 0.f;}
-  try {loadℝ3(Kt.c, j.at("Kt"));} catch(...) {Kt.c = 0.f;}
-  try {loadℝ3(Le.c, j.at("Le"));} catch(...) {Le.c = 0.f;}
-  try {loadℝ3(reflect.c, j.at("reflect"));} catch(...) {reflect.c = 0.f;}
-  try {loadℝ3(transmit.c, j.at("transmit"));} catch(...) {transmit.c = 0.f;}
+  float alpha;
+  try {loadSpectrum(m.Kd, j.at("Kd"));} catch(...) {m.Kd = 0.f;}
+  try {loadSpectrum(m.Ks, j.at("Ks"));} catch(...) {m.Ks = 0.f;}
+  try {loadSpectrum(m.Kt, j.at("Kt"));} catch(...) {m.Kt = 0.f;}
+  try {loadSpectrum(m.Le, j.at("Le"));} catch(...) {m.Le = 0.f;}
+  try {loadSpectrum(m.ior, j.at("ior"));} catch(...) {m.ior = 1.54f;}
   try {load(alpha, j.at("glossiness"));} catch(...) {alpha = 1024;}
-  try {load(ior, j.at("ior"));} catch(...) {ior=1.54;}
-  m.Kd = Kd;
-  m.Ks = Ks;
-  m.Kt = Kt;
-  m.Le = Le;
   m.α = alpha;
-  m.ior = ior;
   m.init();
 }
 /// @todo

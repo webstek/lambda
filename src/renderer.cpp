@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file renderer.cpp
 /// @author Kyle Webster
-/// @version 0.3
-/// @date 3 Dec 2025
+/// @version 0.4
+/// @date 12 Dec 2025
 /// @brief Renderer implementation
 // ****************************************************************************
 #include "renderer.hpp"
@@ -16,7 +16,8 @@ void Renderer::render()
   const uint64_t w = scene.cam.width; const uint64_t h = scene.cam.height;
   image.init(w,h);
 
-  std::vector<linRGB> irradiance(w*h,0.f);
+  std::vector<XYZ> irradiance(w*h,0.f);
+  nl::cg::coefficientλ<nl::cg::Nλ> sample_spec(0.f);
 
   #ifndef DEBUG 
   #pragma omp parallel
@@ -29,13 +30,15 @@ void Renderer::render()
   for (uint64_t i=0;i<h;i++) for (uint64_t j=0;j<w;j++)
   { // compute pixel
     nl::RNG rng(i*w+j);
-    linRGB irrad_acc = 0.f;
+    XYZ irrad_acc = 0.f;
     for (uint64_t k=0;k<SPP;k++)
     { // trace a single path
       sample::info<ray> si;
       nl::ℝ2 const uv = {float(j+rng.flt()), float(i+rng.flt())};
       sample::camera(scene.cam, uv, si, rng);
-      irrad_acc += tracePath(si.val, rng, 0);
+      sample::info<float> si_λ;
+      sample::spectrum(sample_spec, si_λ, rng);
+      irrad_acc += λ2XYZ(tracePath(si_λ.val, si.val, rng, 0));
     }
     irradiance[i*w+j] = irrad_acc;
   }
@@ -45,17 +48,18 @@ void Renderer::render()
   #endif
   for (uint64_t i=0;i<h;i++) for (uint64_t j=0;j<w;j++)
   { // write irradiance to image buffer
-    image.data[(h-i-1)*w+j] = sRGB2rgb24(linRGB2sRGB(irradiance[i*w+j]/SPP));
+    image.data[(h-i-1)*w+j] = 
+      sRGB2rgb24(linRGB2sRGB(XYZ2linRGB(irradiance[i*w+j])/SPP));
   }
   } // ** end of parallel region **************************
 }
 // ****************************************************************************
 
-/// @todo Only handles direct lighting paths at the moment (DL by NEE) 
-linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, uint64_t scatters) const
+float Renderer::tracePath(
+  float λ, ray const &r, nl::RNG &rng, uint64_t scatters) const
 {
   hitinfo hinfo;
-  if (!intersect::scene(scene, r, hinfo)) { return {0.f,0.f,0.f}; } // misses
+  if (!intersect::scene(scene, r, hinfo)) { return 0.f; } // misses
   
   ℝ3 const o = -r.u.normalized();
   ℝ3 const n = hinfo.n();
@@ -64,10 +68,10 @@ linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, uint64_t scatters) const
   // check if path hit a light (emitter material)
   Material const &mat = scene.materials[hinfo.mat];
   if (std::holds_alternative<emitter>(mat)) 
-    { return std::get<emitter>(mat).Radiance(o,hinfo); }
+    { return std::get<emitter>(mat).Radiance(λ,o,hinfo); }
 
   // hit an object, scatter if less than max scattering
-  if (scatters > MAX_SCATTERINGS) return {0.f,0.f,0.f};
+  if (scatters > MAX_SCATTERINGS) return 0.f;
 
   // ** Light IS estimate *******************************
   // sample lights in scene: 
@@ -81,14 +85,14 @@ linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, uint64_t scatters) const
   //   val  = ωi
   //   mult = L(ωi)
   //   weight = L(ωi)/p(ωi|li)
-  sample::info<ℝ3,linRGB> si_i_L;
-  sample::light(si_l.val, hinfo, scene, si_i_L, rng);
+  sample::info<ℝ3,float> si_i_L;
+  sample::light(λ, si_l.val, hinfo, scene, si_i_L, rng);
 
   // evaluate BSDFcosθ for ωi
-  linRGB const coef = BxDFcosθ(mat, si_i_L.val, o, n, hinfo.front);
+  float const coef = BxDFcosθ(λ, mat, si_i_L.val, o, n, hinfo.front);
 
   // Light IS estimate
-  linRGB const L_IS = si_i_L.mult * coef / (si_i_L.prob*si_l.prob);
+  float const L_IS = si_i_L.mult * coef / (si_i_L.prob*si_l.prob);
   // ** end of L IS estimate ****************************
 
   // ** Material IS estimate ****************************
@@ -97,19 +101,19 @@ linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, uint64_t scatters) const
   //   val  = ωi
   //   mult = BxDFcosθ
   //   weight = BxDFcosθ/p(ωi)
-  sample::info<ℝ3,linRGB> si_i_mat;
-  bool const sample = sample::materiali(&mat,hinfo,o,si_i_mat,rng,SAMPLE_P);
+  sample::info<ℝ3,float> si_i_mat;
+  bool const sample = sample::materiali(λ,&mat,hinfo,o,si_i_mat,rng,SAMPLE_P);
   
   // no material sample generated, use light IS estimate
   if (!sample) { return L_IS; }
 
   // evaluate L(ωi)
   ray const i_ray = {hinfo.p, si_i_mat.val};
-  linRGB Li = tracePath(i_ray, rng, scatters+1);
+  float Li = tracePath(λ, i_ray, rng, scatters+1);
   
   // Material IS estimate
   // #ifdef DEBUG
-    linRGB const M_IS = Li*si_i_mat.mult / si_i_mat.prob;
+  float const M_IS = Li*si_i_mat.mult / si_i_mat.prob;
   // #else
   //   linRGB const M_IS = Li*si_i_mat.weight;
   // #endif
@@ -118,7 +122,7 @@ linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, uint64_t scatters) const
   // ** MIS estimate ************************************
   float const p_L_mati = sample::probForLight(si_l.val, i_ray)*si_l.prob;
   float const p_mat_Li = 
-    sample::probForMateriali(&mat, hinfo, si_i_L.val, o, SAMPLE_P);
+    sample::probForMateriali(λ, &mat, hinfo, si_i_L.val, o, SAMPLE_P);
 
   // power heuristic weights, β=2
   float const p_L_i = si_i_L.prob*si_l.prob;
