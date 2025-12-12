@@ -38,7 +38,7 @@ void Renderer::render()
       sample::camera(scene.cam, uv, si, rng);
       sample::info<float> si_λ;
       sample::spectrum(sample_spec, si_λ, rng);
-      irrad_acc += λ2XYZ(tracePath(si_λ.val, si.val, rng, 0));
+      irrad_acc += λ2XYZ(si_λ.val)*tracePath(si_λ.val, si.val, rng, 0)/si_λ.prob;
     }
     irradiance[i*w+j] = irrad_acc;
   }
