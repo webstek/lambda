@@ -15,9 +15,12 @@ BIN_DIR := bin
 BUILD_DIR := build
 
 # Source files
-SOURCES := $(wildcard $(SRC_DIR)/*.cpp) $(wildcard $(LIB_DIR)/LodePNG/*.cpp)
+SOURCES := $(wildcard $(SRC_DIR)/*.cpp) \
+           $(LIB_DIR)/LodePNG/lodepng.cpp \
+           $(LIB_DIR)/fast_obj.c
 OBJECTS := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SOURCES))) \
-           $(patsubst $(LIB_DIR)/LodePNG/%.cpp,$(BUILD_DIR)/%.o,$(filter $(LIB_DIR)/LodePNG/%,$(SOURCES)))
+           $(BUILD_DIR)/lodepng.o \
+           $(BUILD_DIR)/fast_obj.o
 
 # Include paths - find all subdirectories in include/ and lib/
 INCLUDES := -I$(INCLUDE_DIR) $(addprefix -I,$(shell find $(INCLUDE_DIR) -type d))
@@ -46,6 +49,9 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 $(BUILD_DIR)/%.o: $(LIB_DIR)/LodePNG/%.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+	
+$(BUILD_DIR)/%.o: $(LIB_DIR)/%.c | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 # Create directories

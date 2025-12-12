@@ -10,10 +10,6 @@
 using namespace nl::cg;
 using ℝ3 = nl::ℝ3;
 // ************************************
-constexpr uint64_t MAX_SCATTERINGS = 128;
-constexpr uint64_t SPP   = 2048;
-constexpr float SAMPLE_P = 0.95;
-// ************************************
 
 void Renderer::render()
 {
@@ -63,6 +59,7 @@ linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, uint64_t scatters) const
   
   ℝ3 const o = -r.u.normalized();
   ℝ3 const n = hinfo.n();
+  // return linRGB(hinfo.F.x);
 
   // check if path hit a light (emitter material)
   Material const &mat = scene.materials[hinfo.mat];
@@ -136,10 +133,15 @@ linRGB Renderer::tracePath(ray const &r, nl::RNG &rng, uint64_t scatters) const
 
 void Renderer::loadScene(std::string fpath)
 {
+  scene_path = fpath;
   load::loadNLS(scene, fpath);
 }
-void Renderer::saveImage(std::string fname) const
+void Renderer::saveImage() const
 {
+  std::string fname = "render"+
+    scene_path.substr(6,scene_path.length()-10)+"-"+std::to_string(SPP)+"spp-"
+    +std::to_string(MAX_SCATTERINGS)+"b-"
+    +std::format("{:.2f}", SAMPLE_P)+"p.png";
   lodepng::encode(
     fname, image.data[0].c.elem, image.width, image.height, LCT_RGB, 8);
 }

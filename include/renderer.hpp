@@ -16,6 +16,10 @@
 class Renderer
 {
 public:
+  uint64_t MAX_SCATTERINGS = 64;
+  uint64_t SPP   = 64;
+  float SAMPLE_P = 0.95;
+  std::string scene_path;
   nl::cg::image<nl::cg::rgb24> image;
   nl::cg::scene scene;
 
@@ -24,7 +28,7 @@ public:
     nl::cg::ray const &ray, nl::RNG &rng, uint64_t scatters) const;
 
   void loadScene(std::string fpath);
-  void saveImage(std::string fname) const;
+  void saveImage() const;
 };
 
 // ****************************************************************************

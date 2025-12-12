@@ -186,6 +186,8 @@ template<uint32_t n, arithmetic T = std::float64_t> struct ℝn
     { for (uint32_t i=0;i<n-1;i++) elem[i]=x.elem[i]; elem[n-1]=v; }
   constexpr explicit ℝn( ℝn<n+1,T> const &x)
     { for (uint32_t i=0;i<n;i++) elem[i]=x.elem[i]; }
+  constexpr explicit ℝn( T x, T y ) requires (n==2) : elem{x,y} {}
+  constexpr explicit ℝn( T x, T y, T z ) requires (n==3) : elem{x,y,z} {}
   constexpr ℝn(std::initializer_list<T> init)
   {
     auto it=init.begin(); 

@@ -1,0 +1,83 @@
+{
+"camera": {
+  "pos": [0, -60, 12],
+  "look_at": [0, 0, 12],
+  "up": [0, 0, 1],
+  "fov": 30,
+  "ar": 1.778,
+  "width": 1280},
+"lights": [
+  {
+    "name": "sphere-light",
+    "type": "sphere",
+    "transform": {"translate": [0,-10,18], "scale":[0.6,0.6,0.6]},
+    "radiance": [800,700,500]}],
+"objects": [
+  {
+    "name": "sphere1",
+    "type": "sphere",
+    "transform": {"scale": [6,6,6], "translate": [0,4,6]},
+    "material": "reflective"},
+  {
+    "name": "teapot",
+    "type": "trimesh",
+    "transform": {"translate": [0,-10,0], "scale": [2,2,2]},
+    "material": "refractive",
+    "source": "scenes/utah_teapot.obj"},
+  {
+    "name": "wall-top",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1],
+                  "translate": [0,0,24],
+                  "rotate": {"axis":[1,0,0], "degrees": 180}},
+    "material": "gray"},
+  {
+    "name": "wall-bot",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1]},
+    "material": "gray"},
+  {
+    "name": "wall-back",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1], 
+                  "rotate": {"axis": [1,0,0], "degrees": 90}, 
+                  "translate": [0,20,12]},
+    "material": "gray"},
+  {
+    "name": "wall-left",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1], 
+                  "rotate": {"axis": [0,1,0], "degrees": 90}, 
+                  "translate": [-15,0,12]},
+    "material": "red"},
+  {
+    "name": "wall-right",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1], 
+                  "rotate": {"axis": [0,1,0], "degrees": -90}, 
+                  "translate": [15,0,12]},
+    "material": "blue"}],
+"materials": [
+  {
+    "name": "reflective",
+    "type": "blinn",
+    "Ks": [0.9, 0.9, 0.9],
+    "glossiness": 1024},
+  {
+  "name": "refractive",
+  "type": "blinn",
+  "glossiness": 1024,
+  "Kt": [0.9, 0.9, 0.9],
+  "ior": 1.52},
+  {
+    "name": "smooth",
+    "type": "blinn",
+    "Kd": [0.7, 0.7, 0.7],
+    "Ks": [0.3, 0.3, 0.3],
+    "glossiness": 64},
+  {"name":"red",   "type":"lambertian", "albedo":[0.70,0.00,0.00]},
+  {"name":"blue",  "type":"lambertian", "albedo":[0.00,0.15,0.70]},
+  {"name":"cyan",  "type":"lambertian", "albedo":[0.15,0.50,0.60]},
+  {"name":"white", "type":"lambertian", "albedo":[1.00,1.00,1.00]},
+  {"name":"gray",  "type":"lambertian", "albedo":[0.65,0.63,0.60]}]
+}

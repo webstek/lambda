@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file cg.hpp
 /// @author Kyle Webster
-/// @version 0.10
-/// @date 6 Dec 2025
+/// @version 0.12
+/// @date 11 Dec 2025
 /// @brief Numerics Library - Computer Graphics - @ref cg
 /// @details
 /// Collection of computer graphics structures and algorithms
@@ -12,9 +12,11 @@
 // ** Includes ****************************************************************
 #include <variant>
 #include <vector>
+#include <map>
 #include <string>
 #include <fstream>
 
+#include "fast_obj.h"
 #include "json.hpp"
 
 #include "bra.hpp"
@@ -339,13 +341,13 @@ struct aabb
 };
 struct triangle
 {
-  uint64_t V[3], E[3], GN;
+  uint32_t V[3], N[3], u[3];
 };
 
+/// @todo
 template <typename T> struct bvh {};
 
-/// @note All vertex data vectors are indexed by the same indices in F
-struct trimeshdata
+struct trimeshdata : item
 {
   aabb bounds;
   bvh<triangle>         _bvh;  ///< bvh over triangles F
@@ -353,28 +355,28 @@ struct trimeshdata
   std::vector<ℝ3>       N;     ///< vertex normals
   std::vector<ℝ3>       T;     ///< vertex tangent vectors
   std::vector<ℝ2>       u;     ///< vertex texture coords
-  std::vector<ℝ3>       E;     ///< edges
   std::vector<ℝ3>       GN;    ///< face normals
+  std::vector<ℝ3>       GT;    ///< face tangents
   std::vector<triangle> F;     ///< faces (triangles)
-  constexpr ℝ3 const& v(uint64_t face, int i) const {return V[F[face].V[i]];}
-  constexpr ℝ3 const& t(uint64_t face, int i) const {return T[F[face].V[i]];}
-  constexpr ℝ2 const& uv(uint64_t face, int i) const {return u[F[face].V[i]];}
-  constexpr ℝ3 const& e(uint64_t face, int i) const {return E[F[face].E[i]];}
-  constexpr ℝ3 const& gn(uint64_t face) const {return GN[face];}
-  constexpr ℝ3 n(uint64_t face, ℝ3 const &b) const
+  constexpr ℝ3 const& v(uint32_t face, int i) const {return V[F[face].V[i]];}
+  constexpr ℝ3 const& t(uint32_t face, int i) const {return T[F[face].N[i]];}
+  constexpr ℝ2 const& uv(uint32_t face, int i) const {return u[F[face].u[i]];}
+  constexpr ℝ3 const& gn(uint32_t face) const {return GN[face];}
+  constexpr ℝ3 const& gt(uint32_t face) const {return GT[face];}
+  constexpr ℝ3 n(uint32_t face, ℝ3 const &b) const
   { 
     triangle const &tri = F[face]; 
-    return b[0]*N[tri.V[0]]+b[1]*V[tri.V[1]]+b[2]*V[tri.V[2]]; 
+    return b[0]*N[tri.N[0]]+b[1]*N[tri.N[1]]+b[2]*N[tri.N[2]]; 
   }
-  constexpr ℝ3 t(uint64_t face, ℝ3 const &b) const
+  constexpr ℝ3 t(uint32_t face, ℝ3 const &b) const
   {
     triangle const &tri = F[face];
-    return b[0]*T[tri.V[0]]+b[1]*T[tri.V[1]]+b[2]*T[tri.V[2]];
+    return b[0]*T[tri.N[0]]+b[1]*T[tri.N[1]]+b[2]*T[tri.N[2]];
   }
-  constexpr ℝ2 uv(uint64_t face, ℝ3 const &b) const
+  constexpr ℝ2 uv(uint32_t face, ℝ3 const &b) const
   {
     triangle const &tri = F[face];
-    return b[0]*u[tri.V[0]]+b[1]*u[tri.V[1]]+b[2]*u[tri.V[2]];
+    return b[0]*u[tri.u[0]]+b[1]*u[tri.u[1]]+b[2]*u[tri.u[2]];
   }
 };
 // ** end of structures ***************
@@ -702,7 +704,7 @@ constexpr bool plane(cg::plane const &p, ray const &w_ray, hitinfo &hinfo)
   hinfo.z = t;
   hinfo.p = p.T.toWorld(pnt(x));
   hinfo.F.z = p.T.toWorld(normal({0.f,0.f,1.f})).normalized();
-  hinfo.F.x = p.T.toWorld(vec({0.f,1.f,0.f})).normalized();
+  hinfo.F.x = p.T.toWorld(normal({0.f,1.f,0.f})).normalized();
   hinfo.F.y = hinfo.F.z^hinfo.F.x;
   hinfo.front = (w_ray.u|hinfo.F.z) < 0.f;
   hinfo.mat = p.mat;
@@ -711,7 +713,25 @@ constexpr bool plane(cg::plane const &p, ray const &w_ray, hitinfo &hinfo)
 }
 
 /// @brief aabb intersection
-/// @todo
+constexpr float aabb(cg::aabb const &bb, ray const &l_ray, float t_max)
+{
+  float const inv_x = 1.f/l_ray.u[0];
+  float const inv_y = 1.f/l_ray.u[1];
+  float const inv_z = 1.f/l_ray.u[2];
+  float t0x = (bb.inf[0]-l_ray.p[0])*inv_x;
+  float t1x = (bb.sup[0]-l_ray.p[0])*inv_x;
+  float t0y = (bb.inf[1]-l_ray.p[1])*inv_y;
+  float t1y = (bb.sup[1]-l_ray.p[1])*inv_y;
+  float t0z = (bb.inf[2]-l_ray.p[2])*inv_z;
+  float t1z = (bb.sup[2]-l_ray.p[2])*inv_z;
+  if (t0x>t1x) std::swap(t0x,t1x);
+  if (t0y>t1y) std::swap(t0y,t1y);
+  if (t0z>t1z) std::swap(t0z,t1z);
+  float const tmin = max(t0x,max(t0y,t0z));
+  float const tmax = min(t1x,min(t1y,t1z));
+  if (tmax<BIAS || tmax<=tmin || tmin>t_max) return UB<float>;
+  return tmin<BIAS ? tmax : tmin;
+}
 
 /// @brief Triangle-Ray intersection
 /// @warning hinfo.mat and hinfo.obj are NOT set
@@ -721,9 +741,9 @@ constexpr bool trimeshdata(
   ℝ3 const &v0 = mesh.v(face,0);
   ℝ3 const &v1 = mesh.v(face,1);
   ℝ3 const &v2 = mesh.v(face,2);
-  ℝ3 const &e0 = mesh.e(face,0);
-  ℝ3 const &e1 = mesh.e(face,1);
-  ℝ3 const &e2 = mesh.e(face,2);
+  ℝ3 const &e0 = v1-v0;
+  ℝ3 const &e1 = v2-v1;
+  ℝ3 const &e2 = v0-v2;
   ℝ3 const &gn = mesh.gn(face);
   ℝ3 const m(l_ray.p^l_ray.u);
   float const D = l_ray.u|gn;
@@ -749,6 +769,45 @@ constexpr bool trimeshdata(
   return true;
 }
 
+// Woop et al. "Watertight Ray/Triangle Intersection" 
+// Journal of Computer Graphics Techniques. Vol. 2, No. 1, 2013
+inline bool trimeshdata_koi( 
+  unsigned int faceID,
+  cg::trimeshdata const &mesh,
+  ray const &ray, 
+  hitinfo &hInfo)
+{
+  const auto face = mesh.F[faceID];
+  ℝ3 const &v0  = mesh.V[face.V[0]];
+  ℝ3 const &v1  = mesh.V[face.V[1]];
+  ℝ3 const &v2  = mesh.V[face.V[2]];
+  ℝ3 const v10 = v1-v0;
+  ℝ3 const v20 = v2-v0;
+  ℝ3 const pv0 = ray.p-v0;
+  ℝ3 const   n = v10 ^ v20;
+  float const det = -1.f/(ray.u|n);
+
+  // compute t, u, v, check for early exits
+  float const t = det*pv0|n;
+  if (t<BIAS || t>hInfo.z) [[likely]] { return false; }
+  float const b1 = det * ray.u | (v20 ^ pv0);
+  if (b1<0) [[unlikely]] { return false; }
+  float const b2 = det * ray.u | (pv0 ^ v10);
+  if (b2<0 || b1+b2>1) [[unlikely]] { return false; }
+  
+  // triangle is hit
+  float const b0 = 1-b1-b2;
+  ℝ3 const b = {b0, b1, b2}; 
+  // hInfo.N = HasNormals() ? GetNormal(faceID, b).GetNormalized() : hInfo.GN;
+  hInfo.F.z = mesh.n(faceID,b);
+  hInfo.F.x = mesh.t(faceID,b);
+  // hInfo.uvw = HasTextureVertices() ? GetTexCoord(faceID, b) : Vec3f(.5f);
+  hInfo.front = (mesh.GN[faceID] | ray.u) < 0;
+  hInfo.p = ray.p + t*ray.u;
+  hInfo.z = t;
+  return true;
+}
+
 
 /// @brief Mesh-Ray Intersection
 constexpr bool trimesh(
@@ -762,16 +821,17 @@ constexpr bool trimesh(
   int n_faces = mesh.F.size();
   ray const l_ray = tmesh.T.toLocal(w_ray);
 
-  /// @todo aabb check
-
+  /// bounding box check
+  if (aabb(mesh.bounds, l_ray, hinfo.z) == UB<float>) return false;
 
   /// @todo bvh acceleration
-  for (int i=0;i<n_faces;i++) { hit_any|=trimeshdata(i, mesh, l_ray, hinfo); }
+  for (int i=0;i<n_faces;i++) {hit_any|=trimeshdata_koi(i,mesh,l_ray,hinfo);}
+  if (!hit_any) return false;
 
   // convert hinfo to world-space
   hinfo.p   = tmesh.T.toWorld(pnt(hinfo.p));
-  hinfo.F.z = tmesh.T.toWorld(normal(hinfo.F.z));
-  hinfo.F.x = tmesh.T.toWorld(vec(hinfo.F.x));
+  hinfo.F.z = tmesh.T.toWorld(normal(hinfo.F.z)).normalized();
+  hinfo.F.x = tmesh.T.toWorld(normal(hinfo.F.x)).normalized();
   hinfo.F.y = hinfo.F.z^hinfo.F.x;
   hinfo.mat = tmesh.mat;
   hinfo.obj = tmesh.obj;
@@ -1242,7 +1302,87 @@ inline void loadPlane(plane &p, json const &j, list<Material> const &mats)
   p.mat = mats.idxOf(j.at("material").get<std::string>());
 }
 
-/// @todo
+inline void loadTriMeshFromFile(trimeshdata &m, std::string const& fpath)
+{
+  fastObjMesh* obj = fast_obj_read(fpath.c_str());
+
+  // prep bounds for setting
+  m.bounds.inf = UB<float>;
+  m.bounds.sup = -UB<float>;
+
+  // vertices
+  m.V.reserve(obj->position_count);
+  for (unsigned i=0; i<obj->position_count; i++) 
+  {
+    m.V.emplace_back(
+      obj->positions[3*i],obj->positions[3*i+1],obj->positions[3*i+2]);
+    m.bounds.inf[0] = min(m.bounds.inf[0],obj->positions[3*i]);
+    m.bounds.inf[1] = min(m.bounds.inf[1],obj->positions[3*i+1]);
+    m.bounds.inf[2] = min(m.bounds.inf[2],obj->positions[3*i+2]);
+    m.bounds.sup[0] = max(m.bounds.sup[0],obj->positions[3*i]);
+    m.bounds.sup[1] = max(m.bounds.sup[1],obj->positions[3*i+1]);
+    m.bounds.sup[2] = max(m.bounds.sup[2],obj->positions[3*i+2]);
+  }
+
+  // tex coords
+  m.u.reserve(obj->texcoord_count);
+  for (unsigned i=0; i<obj->texcoord_count; i++)
+    { m.u.emplace_back(obj->texcoords[2*i],obj->texcoords[2*i+1]); }
+
+  // normals and tangents
+  m.N.reserve(obj->normal_count);
+  for (unsigned i=0; i<obj->normal_count; i++) 
+  {
+    m.N.emplace_back(obj->normals[3*i],obj->normals[3*i+1],obj->normals[3*i+2]);
+  }
+  
+  // triangles, edges, tangents, and geometric normal
+  m.T.resize(obj->normal_count);
+  m.F.reserve(obj->face_count);
+  m.GN.reserve(obj->face_count);
+  struct edge 
+  {
+    uint32_t v0,v1; 
+    edge(uint32_t V0, uint32_t V1) : v0(V0),v1(V1) {if(v0>v1)std::swap(v0,v1);}
+    bool operator<(const edge &e) const {return v0!=e.v0?v0<e.v0:v1<e.v1;}
+  };
+  std::map<edge,uint32_t> seen_edges;
+  size_t k = 0;
+  for (unsigned f=0; f<obj->face_count; f++) 
+  { // iterate through faces
+    triangle tri;
+    for (unsigned i=0; i<3; i++) 
+    { // vertices
+      fastObjIndex idx = obj->indices[k+i];
+      tri.V[i] = idx.p; // fast_obj uses 1 indexing
+      tri.N[i] = idx.n;
+      tri.u[i] = idx.t;
+    }
+
+    // compute geometric normal
+    ℝ3 const e0 = m.V[tri.V[1]]-m.V[tri.V[0]];
+    ℝ3 const e2 = m.V[tri.V[2]]-m.V[tri.V[0]];
+    m.GN.emplace_back((e0^e2).normalized());
+    m.F.emplace_back(tri);
+
+    // tangents
+    float const du1 = m.u[tri.u[1]][0]-m.u[tri.u[0]][0];
+    float const du2 = m.u[tri.u[2]][0]-m.u[tri.u[0]][0];
+    float const dv1 = m.u[tri.u[1]][1]-m.u[tri.u[0]][1];
+    float const dv2 = m.u[tri.u[2]][1]-m.u[tri.u[0]][1];
+    float const r = 1.f/(du1*dv2-du2*dv1);
+    ℝ3 const B = r*(e2*du1-e0*du2);
+    m.GT.emplace_back((B^m.GN[f]).normalized());
+    for (unsigned i=0; i<3; i++)
+    { // compute tangent per vertex
+      m.T[tri.N[i]] = B^m.N[tri.N[i]].normalized();
+    }
+
+    k += obj->face_vertices[f];  // should be 3 each
+  }
+  fast_obj_destroy(obj);
+}
+
 inline void loadTriMesh(
   trimesh &m, list<Mesh> &meshes, json const &j, list<Material> const &mats)
 {
@@ -1250,6 +1390,15 @@ inline void loadTriMesh(
   loadTransform(T, j.at("transform"));
   m.T = T;
   m.mat = mats.idxOf(j.at("material").get<std::string>());
+  auto fpath = j.at("source").get<std::string>();
+  m.mesh = meshes.idxOf(fpath);
+  if (m.mesh==meshes.size())
+  { // source is not loaded yet
+    trimeshdata mesh_data;
+    mesh_data.name = fpath;
+    loadTriMeshFromFile(mesh_data,fpath);
+    meshes.emplace_back(std::in_place_type<trimeshdata>, mesh_data);
+  }
 }
 
 /// @brief loads all scene objects
