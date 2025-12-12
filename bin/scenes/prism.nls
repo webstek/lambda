@@ -24,22 +24,41 @@
   {
     "name": "prism",
     "type": "trimesh",
-    "transform": {"translate": [-5,-5,5], 
+    "transform": {"translate": [-5,-5,5.5], 
                   "scale": [10,10,10], 
                   "rotate": {"axis":[2,1,0], "degrees": 90}},
     "material": "refractive",
     "source": "scenes/prism.obj"},
   {
+    "name": "sphere1",
+    "type": "sphere",
+    "transform": {"scale": [4,4,4], "translate": [-15,-10,4]},
+    "material": "reflective"},
+  {
     "name": "wall-bot",
     "type": "plane",
     "transform": {"scale": [60, 60, 1]},
-    "material": "gray"}],
+    "material": "gray"},
+  {
+    "name": "wall-left",
+    "type": "plane",
+    "transform": {"scale": [60, 60, 1], 
+                  "rotate": {"axis": [0,1,0], "degrees": 90}, 
+                  "translate": [-35,0,30]},
+    "material": "dark"},
+  {
+    "name": "wall-back",
+    "type": "plane",
+    "transform": {"scale": [60, 60, 1], 
+                  "rotate": {"axis": [1,0,0], "degrees": 90}, 
+                  "translate": [0,30,30]},
+    "material": "dark"}],
 "materials": [
   {
     "name": "reflective",
     "type": "blinn",
     "Ks": [0.9, 0.9, 0.9],
-    "glossiness": 1024},
+    "glossiness": 128},
   {
   "name": "refractive",
   "type": "blinn",
@@ -56,5 +75,6 @@
   {"name":"blue",  "type":"lambertian", "albedo":[0.00,0.15,0.70]},
   {"name":"cyan",  "type":"lambertian", "albedo":[0.15,0.50,0.60]},
   {"name":"white", "type":"lambertian", "albedo":[1.00,1.00,1.00]},
-  {"name":"gray",  "type":"lambertian", "albedo":[0.65,0.63,0.60]}]
+  {"name":"gray",  "type":"lambertian", "albedo":[0.65,0.63,0.60]},
+  {"name":"dark",  "type":"lambertian", "albedo":[0.30,0.30,0.30]}]
 }
