@@ -35,6 +35,10 @@ namespace cg
 { // ** nl::cg ************************
 
 // ************************************
+/// @name constants
+constexpr uint32_t Nλ = 64;
+
+// ************************************
 /// @name aliases
 using materialidx = uint32_t;
 using objectidx   = uint32_t;
@@ -83,7 +87,7 @@ struct list : std::vector<T>
 
 
 // ****************************************************************************
-/// @name spectrums
+/// @name light
 
 // ************************************
 /// @name RGB
@@ -127,8 +131,18 @@ constexpr rgb<T>& operator/=(rgb<T> &C1, float s)
 using rgb24  = rgb<uint8_t>;
 using linRGB = rgb<float>;
 using sRGB   = rgb<float>;
+using XYZ    = rgb<float>;
 
-
+constexpr XYZ linRGB2XYZ( linRGB const &C )
+{ return XYZ(
+    0.4124564f*C.r() + 0.3575761f*C.g() + 0.1804375f*C.b(),
+    0.2126729f*C.r() + 0.7151522f*C.g() + 0.0721750f*C.b(),
+    0.0193339f*C.r() + 0.1191920f*C.g() + 0.9503041f*C.b()); }
+constexpr linRGB XYZ2linRGB( XYZ const &C )
+{ return linRGB(
+     3.2404542f*C.c[0] - 1.5371385f*C.c[1] - 0.4985314f*C.c[2],
+    -0.9692660f*C.c[0] + 1.8760108f*C.c[1] + 0.0415560f*C.c[2],
+     0.0556434f*C.c[0] - 0.2040259f*C.c[1] + 1.0572252f*C.c[2]); }
 constexpr sRGB linRGB2sRGB(linRGB const &x)
 {
   auto f=[](float cl){ return cl>0.0031308f ? 
@@ -139,7 +153,82 @@ constexpr rgb24 sRGB2rgb24(sRGB const &x)
   { return rgb24(float2byte(x.c[0]),float2byte(x.c[1]),float2byte(x.c[2])); }
 
 // ** end of RGB **********************
-// ** end of spectrums ********************************************************
+
+
+// ************************************
+/// @name spectrums
+
+struct sampledλ;
+
+/// @brief Coeffiecient Spectrum - values spaced every Δ in nm
+template <uint32_t n> struct coefficientλ 
+{
+  float const inf=400;
+  float const sup=720;
+  float const Δ=(sup-inf)/(n-1);
+  bra::ℝn<n,float> v;
+  constexpr coefficientλ(float x) {for (uint32_t i=0;i<n;i++) {v[i]=x;}}
+  /// @warning assumes samples are in sorted order
+  coefficientλ(sampledλ const &s)
+  {
+    size_t j=0;
+    for (uint32_t i=0;i<n;i++)
+    { // v[i] is the average of sampledλ <= l[i] but > l[i-1]
+      float const l0=inf+i*Δ;
+      float const l1=l0+Δ;
+      float sum=0.f;
+      while (j+1<s.l.size() && s.l[j+1]<=l0) j++;
+      size_t k=j;
+      while (k+1<s.l.size() && s.l[k]<l1)
+      {
+        float seg0 = max(l0, s.l[k]);
+        float seg1 = min(l1, s.l[k+1]);
+        float seg  = seg1-seg0;
+        if (seg>0) { sum += .5f*(s.v[k]+s.v[k+1])*seg; }
+        k++;
+      }
+      v[i] = sum/Δ;
+    }
+  }
+  constexpr coefficientλ operator*(coefficientλ const &s2) const
+    { coefficientλ s=*this; s.v*=s2.v; return s; }
+  constexpr float operator|(coefficientλ const &s) const
+  {
+    float sum=0.f;
+    for (uint32_t i=0;i<n;i++) { sum+=v[i]*s.v[i]; }
+    return sum*Δ;
+  }
+};
+
+/// @brief Sampled Spectrum - values (λ,v) 
+struct sampledλ 
+{
+  std::vector<float> l; ///< wavelengths
+  std::vector<float> v; ///< values
+  sampledλ(std::string fpath)
+  { // loads from csv file
+    std::ifstream file(fpath);
+    std::string line;
+    while (std::getline(file, line))
+    {
+      std::stringstream ss(line);
+      std::string λstr, vstr;
+      std::getline(ss, λstr, ',');
+      std::getline(ss, vstr, ',');
+      l.emplace_back(std::stof(λstr));
+      v.emplace_back(std::stof(vstr));
+    }
+  }
+};
+
+inline coefficientλ<Nλ> CMF_X(sampledλ("data/xyz_x.csv"));
+inline coefficientλ<Nλ> CMF_Y(sampledλ("data/xyz_y.csv"));
+inline coefficientλ<Nλ> CMF_Z(sampledλ("data/xyz_z.csv"));
+
+constexpr linRGB coefλ2linRGB(coefficientλ<Nλ> const &spec)
+  { return XYZ2linRGB({spec|CMF_X,spec|CMF_Y,spec|CMF_Z}); }
+// ** end of spectrums ****************
+// ** end of light ************************************************************
 
 
 // ****************************************************************************
@@ -151,9 +240,9 @@ struct vec
   constexpr vec() {dir[3]=0.f;}
   constexpr vec(float const (&x)[3]) 
     { for (size_t i=0;i<3;i++) dir[i]=x[i]; dir[3]=0.f; }
-  constexpr vec(vec const &v)  {for(size_t i=0;i<4;i++)dir[i]=v.dir[i];}
-  constexpr vec(ℝ3 const &x)   {for(size_t i=0;i<3;i++)dir[i]=x[i];dir[3]=0.f;}
-  constexpr vec(ℝ4 const &x)   {for(size_t i=0;i<3;i++)dir[i]=x[i];dir[3]=0.f;}
+  constexpr vec(vec const &v) {for(size_t i=0;i<4;i++)dir[i]=v.dir[i];}
+  constexpr vec(ℝ3 const &x) {for(size_t i=0;i<3;i++)dir[i]=x[i];dir[3]=0.f;}
+  constexpr vec(ℝ4 const &x) {for(size_t i=0;i<3;i++)dir[i]=x[i];dir[3]=0.f;}
 };
 constexpr vec operator*(float s, vec const &v) { return vec(v.dir*s); }
 constexpr vec operator*(vec const &v, float s) { return s*v; }
@@ -270,8 +359,9 @@ struct transform
     for (int i=0;i<3;i++) { T.M(i,i)=x[i]; T.M_inv(i,i)=1.f/x[i]; }
     return T;
   }
-  static constexpr transform rotate(ℝ3 const &u, float degrees)
+  static constexpr transform rotate(ℝ3 const &axis, float degrees)
   { // using Rodrigues' formula R(u,θ) = cosθI+(1-cosθ)*outer(u)-sinθ*skew(u)
+    ℝ3 const u = axis.normalized();
     transform T;
     const float θ = deg2rad(degrees);
     const float cosθ = cosf32(θ);
@@ -594,10 +684,12 @@ struct hitinfo
   float z = UB<float>;
   ℝ3 p;
   basis F; ///< coordinate frame at hit point
+  ℝ3 gn;
   bool front;
   materialidx mat;
   objectidx obj;
   constexpr ℝ3 n() const { return front ? F.z : -F.z; }
+  constexpr ℝ3 geoN() const { return front ? gn : -gn; }
 };
 
 struct camera 
@@ -684,6 +776,7 @@ constexpr bool sphere(cg::sphere const &s, ray const &w_ray, hitinfo &hinfo)
   hinfo.F.x = t_vec;
   hinfo.F.y = b_vec;
   hinfo.F.z = n;
+  hinfo.gn = n;
   hinfo.front = front;
   hinfo.mat = s.mat;
   hinfo.obj = s.obj;
@@ -706,6 +799,7 @@ constexpr bool plane(cg::plane const &p, ray const &w_ray, hitinfo &hinfo)
   hinfo.F.z = p.T.toWorld(normal({0.f,0.f,1.f})).normalized();
   hinfo.F.x = p.T.toWorld(normal({0.f,1.f,0.f})).normalized();
   hinfo.F.y = hinfo.F.z^hinfo.F.x;
+  hinfo.gn  = hinfo.F.z;
   hinfo.front = (w_ray.u|hinfo.F.z) < 0.f;
   hinfo.mat = p.mat;
   hinfo.obj = p.obj;
@@ -735,6 +829,7 @@ constexpr float aabb(cg::aabb const &bb, ray const &l_ray, float t_max)
 
 /// @brief Triangle-Ray intersection
 /// @warning hinfo.mat and hinfo.obj are NOT set
+/// @todo fix plucker coordinate intersection
 constexpr bool trimeshdata(
   uint64_t face, cg::trimeshdata const &mesh, ray const &l_ray, hitinfo &hinfo)
 {
@@ -754,15 +849,16 @@ constexpr bool trimeshdata(
   if (s0*D<-BIAS || s1*D<-BIAS || s2*D<-BIAS) [[likely]] 
     { return false; } // not in triangle
   float const t = ((v0-l_ray.p)|gn)/D;
-  if (t<0.f || hinfo.z < t) { return false; } // behind ray or not closest hit
+  if (t<0.f || hinfo.z<t) { return false; } // behind ray or not closest hit
 
   // barycentric coordinates
-  float const inv_D = 1.f/D;
-  ℝ3 const b({s0*inv_D, s1*inv_D, s2*inv_D});
+  float const tot = 1.f/D;
+  ℝ3 const b(s0*tot, s1*tot, s2*tot);
 
   // populate hinfo
   hinfo.z = t;
   hinfo.p = l_ray(t);
+  hinfo.gn = gn;
   hinfo.F.z = mesh.n(face,b);
   hinfo.F.x = mesh.t(face,b);
   hinfo.front = (gn|l_ray.u)<0.f;
@@ -774,7 +870,7 @@ constexpr bool trimeshdata(
 inline bool trimeshdata_koi( 
   unsigned int faceID,
   cg::trimeshdata const &mesh,
-  ray const &ray, 
+  ray const &l_ray, 
   hitinfo &hInfo)
 {
   const auto face = mesh.F[faceID];
@@ -783,27 +879,27 @@ inline bool trimeshdata_koi(
   ℝ3 const &v2  = mesh.V[face.V[2]];
   ℝ3 const v10 = v1-v0;
   ℝ3 const v20 = v2-v0;
-  ℝ3 const pv0 = ray.p-v0;
+  ℝ3 const pv0 = l_ray.p-v0;
   ℝ3 const   n = v10 ^ v20;
-  float const det = -1.f/(ray.u|n);
+  float const udotn = l_ray.u|n;
+  float const det = -1.f/udotn;
 
   // compute t, u, v, check for early exits
   float const t = det*pv0|n;
   if (t<BIAS || t>hInfo.z) [[likely]] { return false; }
-  float const b1 = det * ray.u | (v20 ^ pv0);
+  float const b1 = det * l_ray.u | (v20 ^ pv0);
   if (b1<0) [[unlikely]] { return false; }
-  float const b2 = det * ray.u | (pv0 ^ v10);
+  float const b2 = det * l_ray.u | (pv0 ^ v10);
   if (b2<0 || b1+b2>1) [[unlikely]] { return false; }
   
   // triangle is hit
   float const b0 = 1-b1-b2;
   ℝ3 const b = {b0, b1, b2}; 
-  // hInfo.N = HasNormals() ? GetNormal(faceID, b).GetNormalized() : hInfo.GN;
+  hInfo.gn = mesh.gn(faceID);
   hInfo.F.z = mesh.n(faceID,b);
   hInfo.F.x = mesh.t(faceID,b);
-  // hInfo.uvw = HasTextureVertices() ? GetTexCoord(faceID, b) : Vec3f(.5f);
-  hInfo.front = (mesh.GN[faceID] | ray.u) < 0;
-  hInfo.p = ray.p + t*ray.u;
+  hInfo.front = (mesh.GN[faceID] | l_ray.u) < 0;
+  hInfo.p = l_ray.p + t*l_ray.u;
   hInfo.z = t;
   return true;
 }
@@ -830,6 +926,7 @@ constexpr bool trimesh(
 
   // convert hinfo to world-space
   hinfo.p   = tmesh.T.toWorld(pnt(hinfo.p));
+  hinfo.gn  = tmesh.T.toWorld(normal(hinfo.gn)).normalized();
   hinfo.F.z = tmesh.T.toWorld(normal(hinfo.F.z)).normalized();
   hinfo.F.x = tmesh.T.toWorld(normal(hinfo.F.x)).normalized();
   hinfo.F.y = hinfo.F.z^hinfo.F.x;
@@ -934,8 +1031,8 @@ inline void spherelight(
   // get L(ωi)
   hitinfo temp;
   temp.z = std::sqrtf(dist2);
-  float const shadowing = 
-    intersect::scene(sc,{hinfo.p, ωi},temp,sl._sphere.obj) ? 0.f : 1.f;
+  float const shadowing = intersect::scene(
+    sc, {hinfo.p+.05f*hinfo.n(),ωi}, temp, sl._sphere.obj) ? 0.f : 1.f;
   info.mult = sl.radiance*shadowing;
 }
 /// @brief probability that a ray (direction from a hit point) could be sampled
@@ -1333,20 +1430,15 @@ inline void loadTriMeshFromFile(trimeshdata &m, std::string const& fpath)
   m.N.reserve(obj->normal_count);
   for (unsigned i=0; i<obj->normal_count; i++) 
   {
-    m.N.emplace_back(obj->normals[3*i],obj->normals[3*i+1],obj->normals[3*i+2]);
+    m.N.emplace_back(
+      obj->normals[3*i],obj->normals[3*i+1],obj->normals[3*i+2]);
   }
   
   // triangles, edges, tangents, and geometric normal
   m.T.resize(obj->normal_count);
   m.F.reserve(obj->face_count);
   m.GN.reserve(obj->face_count);
-  struct edge 
-  {
-    uint32_t v0,v1; 
-    edge(uint32_t V0, uint32_t V1) : v0(V0),v1(V1) {if(v0>v1)std::swap(v0,v1);}
-    bool operator<(const edge &e) const {return v0!=e.v0?v0<e.v0:v1<e.v1;}
-  };
-  std::map<edge,uint32_t> seen_edges;
+  m.GT.reserve(obj->face_count);
   size_t k = 0;
   for (unsigned f=0; f<obj->face_count; f++) 
   { // iterate through faces
@@ -1354,7 +1446,7 @@ inline void loadTriMeshFromFile(trimeshdata &m, std::string const& fpath)
     for (unsigned i=0; i<3; i++) 
     { // vertices
       fastObjIndex idx = obj->indices[k+i];
-      tri.V[i] = idx.p; // fast_obj uses 1 indexing
+      tri.V[i] = idx.p;
       tri.N[i] = idx.n;
       tri.u[i] = idx.t;
     }
@@ -1377,8 +1469,7 @@ inline void loadTriMeshFromFile(trimeshdata &m, std::string const& fpath)
     { // compute tangent per vertex
       m.T[tri.N[i]] = B^m.N[tri.N[i]].normalized();
     }
-
-    k += obj->face_vertices[f];  // should be 3 each
+    k += 3;
   }
   fast_obj_destroy(obj);
 }

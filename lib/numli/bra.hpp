@@ -377,14 +377,13 @@ constexpr ℝn<l,T> column(ℝnxm<n,m,T> const &A, uint32_t j, uint32_t i0=0)
 
 /// @brief Transpose of sub matrix of A of size (l,k) starting at (i,j)
 template<uint32_t l, uint32_t k, uint32_t n, uint32_t m, arithmetic T>
-constexpr ℝnxm<l,k,T> subMatT(ℝnxm<n,m,T> const &A,uint32_t i0=0,uint32_t j0=0)
+constexpr ℝnxm<k,l,T> subMatT(ℝnxm<n,m,T> const &A,uint32_t i0=0,uint32_t j0=0)
 {
   assert(i0<n); assert(j0<m); assert(l<=n-i0); assert(k<=m-j0);
   T vals[l*k];
-  uint64_t idx=0;
-  for (uint32_t i=0;i<l;i++) for (uint32_t j=0;j<k;j++,idx++)
-    { vals[idx] = A(i0+i,j0+j); }
-  return ℝnxm<l,k,T>(vals);
+  for (uint32_t i=0;i<l;i++) for (uint32_t j=0;j<k;j++)
+    { vals[j*l+i] = A(i0+i,j0+j); }
+  return ℝnxm<k,l,T>(vals);
 }
 
 /// @brief square matrix inverse

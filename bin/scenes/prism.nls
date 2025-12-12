@@ -1,0 +1,60 @@
+{
+"camera": {
+  "pos": [10, -30, 15],
+  "look_at": [-5, 0, 5],
+  "up": [0, 0, 1],
+  "fov": 50,
+  "ar": 1.778,
+  "width": 1280},
+"lights": [
+  {
+    "name": "sphere-light",
+    "type": "sphere",
+    "transform": {"translate": [-6,-6,15], "scale":[1.75,1.75,1.75]},
+    "radiance": [180,160,120]}],
+"objects": [
+  {
+  "name": "teapot",
+  "type": "trimesh",
+  "transform": {"translate": [5,4,0], 
+                "scale": [2.6,2.6,2.6], 
+                "rotate": {"axis":[0,0,1], "degrees": 180}},
+  "material": "red",
+  "source": "scenes/teapot_6.obj"},
+  {
+    "name": "prism",
+    "type": "trimesh",
+    "transform": {"translate": [-5,-5,5], 
+                  "scale": [10,10,10], 
+                  "rotate": {"axis":[2,1,0], "degrees": 90}},
+    "material": "refractive",
+    "source": "scenes/prism.obj"},
+  {
+    "name": "wall-bot",
+    "type": "plane",
+    "transform": {"scale": [60, 60, 1]},
+    "material": "gray"}],
+"materials": [
+  {
+    "name": "reflective",
+    "type": "blinn",
+    "Ks": [0.9, 0.9, 0.9],
+    "glossiness": 1024},
+  {
+  "name": "refractive",
+  "type": "blinn",
+  "glossiness": 2048,
+  "Kt": [0.9, 0.9, 0.9],
+  "ior": 1.52},
+  {
+    "name": "smooth",
+    "type": "blinn",
+    "Kd": [0.7, 0.7, 0.7],
+    "Ks": [0.3, 0.3, 0.3],
+    "glossiness": 256},
+  {"name":"red",   "type":"lambertian", "albedo":[0.70,0.00,0.00]},
+  {"name":"blue",  "type":"lambertian", "albedo":[0.00,0.15,0.70]},
+  {"name":"cyan",  "type":"lambertian", "albedo":[0.15,0.50,0.60]},
+  {"name":"white", "type":"lambertian", "albedo":[1.00,1.00,1.00]},
+  {"name":"gray",  "type":"lambertian", "albedo":[0.65,0.63,0.60]}]
+}

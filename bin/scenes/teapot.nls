@@ -11,19 +11,16 @@
     "name": "sphere-light",
     "type": "sphere",
     "transform": {"translate": [0,-10,18], "scale":[0.6,0.6,0.6]},
-    "radiance": [800,700,500]}],
+    "radiance": [600,500,300]}],
 "objects": [
-  {
-    "name": "sphere1",
-    "type": "sphere",
-    "transform": {"scale": [6,6,6], "translate": [0,4,6]},
-    "material": "reflective"},
   {
     "name": "teapot",
     "type": "trimesh",
-    "transform": {"translate": [0,-10,0], "scale": [2,2,2]},
+    "transform": {"translate": [0,0,0], 
+                  "scale": [3,3,3], 
+                  "rotate": {"axis":[0,0,1], "degrees": 20}},
     "material": "refractive",
-    "source": "scenes/utah_teapot.obj"},
+    "source": "scenes/teapot_6.obj"},
   {
     "name": "wall-top",
     "type": "plane",
