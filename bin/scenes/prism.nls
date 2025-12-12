@@ -74,5 +74,6 @@
   {"name":"red",   "type":"lambertian", "albedo":"scenes/dupont_red_orange_21.csv"},
   {"name":"blue",  "type":"lambertian", "albedo":"scenes/dupont_blue_34.csv"},
   {"name":"white", "type":"lambertian", "albedo": 1.0},
-  {"name":"gray",  "type":"lambertian", "albedo":"scenes/floor.csv"}]
+  {"name":"gray",  "type":"lambertian", "albedo":"scenes/floor.csv"},
+  {"name":"dark",  "type":"lambertian", "albedo": 0.3}]
 }
