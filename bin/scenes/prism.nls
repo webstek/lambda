@@ -24,16 +24,35 @@
   {
     "name": "prism",
     "type": "trimesh",
-    "transform": {"translate": [-5,-5,5], 
+    "transform": {"translate": [-5,-5,5.5], 
                   "scale": [10,10,10], 
                   "rotate": {"axis":[2,1,0], "degrees": 90}},
     "material": "refractive",
     "source": "scenes/prism.obj"},
   {
+    "name": "sphere1",
+    "type": "sphere",
+    "transform": {"scale": [4,4,4], "translate": [-15,-10,4]},
+    "material": "reflective"},
+  {
     "name": "wall-bot",
     "type": "plane",
     "transform": {"scale": [60, 60, 1]},
-    "material": "gray"}],
+    "material": "gray"},
+  {
+    "name": "wall-left",
+    "type": "plane",
+    "transform": {"scale": [60, 60, 1], 
+                  "rotate": {"axis": [0,1,0], "degrees": 90}, 
+                  "translate": [-35,0,30]},
+    "material": "dark"},
+  {
+    "name": "wall-back",
+    "type": "plane",
+    "transform": {"scale": [60, 60, 1], 
+                  "rotate": {"axis": [1,0,0], "degrees": 90}, 
+                  "translate": [0,30,30]},
+    "material": "dark"}],
 "materials": [
   {
     "name": "reflective",
@@ -55,5 +74,6 @@
   {"name":"red",   "type":"lambertian", "albedo":"scenes/dupont_red_orange_21.csv"},
   {"name":"blue",  "type":"lambertian", "albedo":"scenes/dupont_blue_34.csv"},
   {"name":"white", "type":"lambertian", "albedo": 1.0},
-  {"name":"gray",  "type":"lambertian", "albedo":"scenes/floor.csv"}]
+  {"name":"gray",  "type":"lambertian", "albedo":"scenes/floor.csv"},
+  {"name":"dark",  "type":"lambertian", "albedo": 0.3}]
 }
