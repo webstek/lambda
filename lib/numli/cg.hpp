@@ -594,8 +594,8 @@ struct blinn : item
     w_t    = Kt|Kt;
     p_spec = 1.f-p_d;
   }
-  constexpr float F0(float ior) const
-    { return (ior*ior-2.f*ior+1.f)/(ior*ior+2.f*ior+1.f); }
+  constexpr float F0(float n) const
+    { return (n*n-2.f*n+1.f)/(n*n+2.f*n+1.f); }
   constexpr float fresnel(float F0, float cos_i) const 
     { return F0+(1.f-F0)*std::pow(1.f-cos_i,5); }
   constexpr std::pair<float,float> fresnelSplit(float F) const
@@ -1181,7 +1181,7 @@ inline bool blinni(
     
     /// @todo, compare with transmitted Fresnel split
     float const cos_o = o|h;
-    float F = b.fresnel(b.F0(l),cos_o);
+    float F = b.fresnel(b.F0(η),cos_o);
     if (i_T[0]==0.f) { F=1.f; } // TIR, all reflection
     auto [p_r, p_t] = b.fresnelSplit(F);
 
@@ -1231,7 +1231,7 @@ inline float probForBlinn(
   if (cos_in>0.f) { h = (i+o).normalized(); }
   else { h = -(i+ior*o).normalized(); } // always points to lower ior mat
   float const cos_o = std::abs(o|h);
-  float const F = b.fresnel(b.F0(l), cos_o);
+  float const F = b.fresnel(b.F0(ior), cos_o);
   auto [p_r, p_t] = b.fresnelSplit(F);
   if (cos_in>0.f)
   { // reflection/diffuse
