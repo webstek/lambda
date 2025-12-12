@@ -158,7 +158,26 @@ constexpr rgb24 sRGB2rgb24(sRGB const &x)
 // ************************************
 /// @name spectrums
 
-struct sampledλ;
+/// @brief Sampled Spectrum - values (λ,v) 
+struct sampledλ 
+{
+  std::vector<float> l; ///< wavelengths
+  std::vector<float> v; ///< values
+  sampledλ(std::string fpath)
+  { // loads from csv file
+    std::ifstream file(fpath);
+    std::string line;
+    while (std::getline(file, line))
+    {
+      std::stringstream ss(line);
+      std::string λstr, vstr;
+      std::getline(ss, λstr, ',');
+      std::getline(ss, vstr, ',');
+      l.emplace_back(std::stof(λstr));
+      v.emplace_back(std::stof(vstr));
+    }
+  }
+};
 
 /// @brief Coeffiecient Spectrum - values spaced every Δ in nm
 template <uint32_t n> struct coefficientλ 
@@ -214,35 +233,14 @@ template <uint32_t n> struct coefficientλ
   std::string toString() const 
   {
     std::string s=""; 
-    for (uint32_t i=0;i<n;i++) {s+=std::format("{:.2f}",v.[i]);} 
+    for (uint32_t i=0;i<n;i++) {s+=std::format("{:.2f}",v[i]);} 
     return s;
   }
 };
 
-/// @brief Sampled Spectrum - values (λ,v) 
-struct sampledλ 
-{
-  std::vector<float> l; ///< wavelengths
-  std::vector<float> v; ///< values
-  sampledλ(std::string fpath)
-  { // loads from csv file
-    std::ifstream file(fpath);
-    std::string line;
-    while (std::getline(file, line))
-    {
-      std::stringstream ss(line);
-      std::string λstr, vstr;
-      std::getline(ss, λstr, ',');
-      std::getline(ss, vstr, ',');
-      l.emplace_back(std::stof(λstr));
-      v.emplace_back(std::stof(vstr));
-    }
-  }
-};
-
-inline coefficientλ<Nλ> CMF_X(sampledλ("data/xyz_x.csv"));
-inline coefficientλ<Nλ> CMF_Y(sampledλ("data/xyz_y.csv"));
-inline coefficientλ<Nλ> CMF_Z(sampledλ("data/xyz_z.csv"));
+inline coefficientλ<Nλ> CMF_X(sampledλ("../lib/numli/data/xyz_x.csv"));
+inline coefficientλ<Nλ> CMF_Y(sampledλ("../lib/numli/data/xyz_y.csv"));
+inline coefficientλ<Nλ> CMF_Z(sampledλ("../lib/numli/data/xyz_z.csv"));
 
 constexpr XYZ λ2XYZ(float l) { return {CMF_X(l), CMF_Y(l), CMF_Z(l)};}
 constexpr linRGB coefλ2linRGB(coefficientλ<Nλ> const &spec)
@@ -291,7 +289,6 @@ struct ray
 {
   ℝ3 p;
   ℝ3 u;
-  float λ;
   ray() {}
   ray(ℝ3 const &p, ℝ3 const &u) : p(p), u(u) {}
   ray(ℝ4 const &p, ℝ4 const &u) : 

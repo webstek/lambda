@@ -11,7 +11,7 @@
     "name": "sphere-light",
     "type": "sphere",
     "transform": {"translate": [-6,-6,15], "scale":[1.75,1.75,1.75]},
-    "radiance": [180,160,120]}],
+    "radiance": 120}],
 "objects": [
   {
   "name": "teapot",
@@ -57,24 +57,22 @@
   {
     "name": "reflective",
     "type": "blinn",
-    "Ks": [0.9, 0.9, 0.9],
-    "glossiness": 128},
+    "Ks": "scenes/polished_silver.csv",
+    "glossiness": 1024},
   {
   "name": "refractive",
   "type": "blinn",
   "glossiness": 2048,
-  "Kt": [0.9, 0.9, 0.9],
-  "ior": 1.52},
+  "Kt": 0.9,
+  "ior": "scenes/Rubin-clear.csv"},
   {
     "name": "smooth",
     "type": "blinn",
-    "Kd": [0.7, 0.7, 0.7],
-    "Ks": [0.3, 0.3, 0.3],
+    "Kd": 0.7,
+    "Ks": 0.3,
     "glossiness": 256},
-  {"name":"red",   "type":"lambertian", "albedo":[0.70,0.00,0.00]},
-  {"name":"blue",  "type":"lambertian", "albedo":[0.00,0.15,0.70]},
-  {"name":"cyan",  "type":"lambertian", "albedo":[0.15,0.50,0.60]},
-  {"name":"white", "type":"lambertian", "albedo":[1.00,1.00,1.00]},
-  {"name":"gray",  "type":"lambertian", "albedo":[0.65,0.63,0.60]},
-  {"name":"dark",  "type":"lambertian", "albedo":[0.30,0.30,0.30]}]
+  {"name":"red",   "type":"lambertian", "albedo":"scenes/dupont_red_orange_21.csv"},
+  {"name":"blue",  "type":"lambertian", "albedo":"scenes/dupont_blue_34.csv"},
+  {"name":"white", "type":"lambertian", "albedo": 1.0},
+  {"name":"gray",  "type":"lambertian", "albedo":"scenes/floor.csv"}]
 }
