@@ -639,7 +639,18 @@ struct blinn : item
 };
 struct microfacet : item
 {
-
+  coefficientλ<Nλ> albedo, ior;
+  float αu, αv;
+  float fresnel_g(float n, float c) const // n is n_i/n_o
+    { float q=n*n-1+c*c; return q>0.f ? std::sqrtf(q) : -1.f; }
+  float F(float n, float c) const // c is abs(i|m)
+  { 
+    float const g=fresnel_g(n,c);
+    if (g==-1.f) return 1.f;
+    float const gmc = g-c;
+    float const gpc = g+c;
+    return .5f*gmc*gmc*(1+(c*gpc-1)*(c*gpc-1)/((c*gmc+1)*(c*gmc+1)))/(gpc*gpc);
+  }
 };
 struct emitter : item
 {

@@ -33,7 +33,7 @@
     "name": "sphere1",
     "type": "sphere",
     "transform": {"scale": [4,4,4], "translate": [-15,-10,4]},
-    "material": "reflective"},
+    "material": "sapphire"},
   {
     "name": "wall-bot",
     "type": "plane",
@@ -45,14 +45,14 @@
     "transform": {"scale": [60, 60, 1], 
                   "rotate": {"axis": [0,1,0], "degrees": 90}, 
                   "translate": [-35,0,30]},
-    "material": "dark"},
+    "material": "reflective"},
   {
     "name": "wall-back",
     "type": "plane",
     "transform": {"scale": [60, 60, 1], 
                   "rotate": {"axis": [1,0,0], "degrees": 90}, 
                   "translate": [0,30,30]},
-    "material": "dark"}],
+    "material": "blue"}],
 "materials": [
   {
     "name": "reflective",
@@ -65,6 +65,12 @@
   "glossiness": 2048,
   "Kt": 0.9,
   "ior": "scenes/Rubin-clear.csv"},
+  {
+  "name": "sapphire",
+  "type": "blinn",
+  "glossiness": 2048,
+  "Kt": 0.95,
+  "ior": "scenes/Malitson-o.csv"},
   {
     "name": "smooth",
     "type": "blinn",

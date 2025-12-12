@@ -10,16 +10,10 @@ and planes.
 From the project root invoke `make [debug, release]` for debug or release 
 
 ## Usage
-Navigate to `bin/`, call `./lambda` to perform a rendering. To change the SPP,
-maximum scatterings per path, and scatter sampling chance, edit `renderer.cpp`
-directly and rebuild. To change the scene, edit `main.cpp` directly and 
-rebuild.
+Navigate to `bin/`, call `./lambda <fpath> -s <SPP> -b <MAX_BOUNCES> -p <BOUNCE_PROB>` for rendering.
 
 ## Future Work
-* HPC script
 * Anisotropic material
-* Spectral rendering
-* Triangle meshes + BVH
 * Textures
 * loading `gltf` scenes linked in `.nls` files
 * Verifying Depth of Field
