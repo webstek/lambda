@@ -11,7 +11,7 @@
     "name": "sphere-light",
     "type": "sphere",
     "transform": {"translate": [-6,-6,15], "scale":[1.75,1.75,1.75]},
-    "radiance": 120}],
+    "radiance": 400}],
 "objects": [
   {
   "name": "teapot",
@@ -24,7 +24,7 @@
   {
     "name": "prism",
     "type": "trimesh",
-    "transform": {"translate": [-5,-5,5.5], 
+    "transform": {"translate": [-5,-5,5.65], 
                   "scale": [10,10,10], 
                   "rotate": {"axis":[2,1,0], "degrees": 90}},
     "material": "refractive",
