@@ -415,7 +415,6 @@ struct transform
 };
 
 /// @brief compose transform T2 after T1
-/// @todo composition operator
 constexpr transform operator<<(transform const &T1, transform const &T2)
 {
   transform T;
@@ -452,8 +451,11 @@ struct triangle
   uint32_t V[3], N[3], u[3];
 };
 
-/// @todo
-template <typename T> struct bvh {};
+/// @todo bvh
+template <typename T> struct bvh 
+{
+
+};
 
 struct trimeshdata : item
 {
@@ -542,17 +544,17 @@ constexpr LightType str2light(std::string s)
 
 struct ambientlight : item
 {
-  coefficientλ<Nλ> irradiance;
+  coefficientλ<Nλ> radiance;
 };
 struct pointlight : item
 {
-  linRGB radiant_intensity;
-  pnt   pos;
+  coefficientλ<Nλ> radiant_intensity;
+  ℝ3 pos;
 };
 struct dirlight : item
 {
-  linRGB radiant_intensity;
-  vec   dir;
+  coefficientλ<Nλ> radiant_intensity;
+  ℝ3 dir;
 };
 struct spherelight : item
 {
@@ -1045,6 +1047,59 @@ inline void lights(
   info.val = &lights[i];
 }
 
+/// @brief samples an ambient light at wavelength l
+inline void ambientlight(
+  float l,
+  cg::ambientlight const &al,
+  hitinfo const &hinfo,
+  info<ℝ3,float> &info,
+  RNG &rng)
+{
+  // get direction in hemisphere
+  ℝ3 const dir = stoch::UnifHemi(rng.flt(),rng.flt());
+  ℝ3 i = hinfo.F.toBasis(dir);
+  if (!hinfo.front) i[2]*=-1.f; // flip to correct hemisphere
+  info.val = i;
+  info.prob = .5f*inv_π<float>;
+  float const radiance = al.radiance(l);
+  info.mult = radiance;
+  info.weight = 2.f*π<float>*radiance;
+}
+/// @todo probForAmbientLight
+
+/// @brief samples a point light at wavelength l
+/// @todo finish pointlight samping
+inline void pointlight(
+  float l, 
+  cg::pointlight const &pl, 
+  hitinfo const &hinfo, 
+  scene const &sc, 
+  info<ℝ3,float> &info)
+{
+  ℝ3 const L = pl.pos-hinfo.p;
+  ℝ3 const i = L.normalized();
+  info.val = i;
+  info.prob = 1.f;
+
+  // check shadowing
+  float const dist = L.l2();
+  hitinfo temp;
+  temp.z = dist;
+  float const shadowing = 
+    intersect::scene(sc,{hinfo.p+.05f*hinfo.n(),i},temp) ? 0.f : 1.f;
+  info.mult = pl.radiant_intensity(l)*shadowing/(dist*dist);
+}
+/// @todo probForPointLight
+
+/// @todo dirlight sampling
+inline void dirlight(
+  float l, 
+  cg::dirlight const &dl,
+  hitinfo const &hinfo,
+  scene const &sc,
+  info<ℝ3,float> &info);
+/// @todo probForDirLight
+
 /// @brief uniformly samples the solid angle of a sphere light from a point
 inline void spherelight(
   float l,
@@ -1100,6 +1155,9 @@ constexpr void light(
 {
   std::visit(Overload{
     [&](cg::spherelight const &sl){spherelight(l,sl,hinfo,sc,info,rng);},
+    [&](cg::pointlight const &pl){pointlight(l,pl,hinfo,sc,info);},
+    [&](cg::dirlight const &dl){dirlight(l,dl,hinfo,sc,info);},
+    [&](cg::ambientlight const &al){ambientlight(l,al,hinfo,info,rng);},
     [](auto const &){}
   }, *light);
 }
@@ -1364,11 +1422,17 @@ inline void loadCamera(camera &cam, json const &j)
 /// @name light loading
 
 inline void loadAmbientLight(ambientlight &light, json const &j) 
-  {loadSpectrum(light.irradiance, j.at("irradiance"));}
-/// @todo
-inline void loadPointLight(pointlight &light, json const &j);
-/// @todo
-inline void loadDirLight(dirlight &light, json const &j);
+  {loadSpectrum(light.radiance, j.at("radiance"));}
+inline void loadPointLight(pointlight &light, json const &j)
+{
+  loadSpectrum(light.radiant_intensity, j.at("radiant_intensity"));
+  loadℝ3(light.pos, j.at("pos"));
+}
+inline void loadDirLight(dirlight &light, json const &j)
+{
+  loadSpectrum(light.radiant_intensity, j.at("radiant_intensity"));
+  loadℝ3(light.dir, j.at("dir"));
+}
 inline void loadSphereLight(
   spherelight &light, 
   json const &j, 
@@ -1393,7 +1457,6 @@ inline void loadSphereLight(
   light.size = sx;
   light._sphere = s;
 }
-/// @todo point and direction light loading
 inline void loadLights(
   scene &scene,
   json const &j) 
@@ -1407,15 +1470,29 @@ inline void loadLights(
     switch (type)
     {
     case LightType::AMBIENT:
-      {
-        ambientlight l; 
-        l.name=name; 
-        loadAmbientLight(l, j_light); 
-        scene.lights.emplace_back(std::in_place_type<ambientlight>,l);
-        break;
-      }
-    case LightType::POINT: break;
-    case LightType::DIR: break;
+    {
+      ambientlight l; 
+      l.name=name; 
+      loadAmbientLight(l, j_light); 
+      scene.lights.emplace_back(std::in_place_type<ambientlight>,l);
+      break;
+    }
+    case LightType::POINT: 
+    {
+      pointlight l;
+      l.name=name;
+      loadPointLight(l, j_light);
+      scene.lights.emplace_back(std::in_place_type<pointlight>,l);
+      break;
+    }
+    case LightType::DIR: 
+    {
+      dirlight l;
+      l.name=name;
+      loadDirLight(l, j_light);
+      scene.lights.emplace_back(std::in_place_type<dirlight>,l);
+      break;
+    }
     case LightType::SPHERE:
     {
       spherelight light;
@@ -1426,7 +1503,7 @@ inline void loadLights(
       scene.lights.emplace_back(std::in_place_type<spherelight>,light);
       break;
     }
-    }
+    } // end switch
   }
 }
 // ************************************
@@ -1434,7 +1511,7 @@ inline void loadLights(
 // ************************************
 /// @name object loading
 
-/// @todo
+/// @todo group loading
 inline void loadGroup() {}
 
 inline void loadSphere(sphere &s, json const &j, list<Material> const &mats)
@@ -1615,7 +1692,7 @@ inline void loadBlinn(blinn &m, json const &j)
   m.α = alpha;
   m.init();
 }
-/// @todo
+/// @todo microfacet material loading
 inline void loadMicrofacet(microfacet &m, json const &j) {(void)m; (void)j;}
 
 inline void loadMaterial(Material &mat, json const &j)
