@@ -1056,19 +1056,26 @@ inline void ambientlight(
   RNG &rng)
 {
   // get direction in hemisphere
-  ℝ3 const dir = stoch::UnifHemi(rng.flt(),rng.flt());
-  ℝ3 i = hinfo.F.toBasis(dir);
-  if (!hinfo.front) i[2]*=-1.f; // flip to correct hemisphere
+  ℝ3 dir = stoch::UnifHemi(rng.flt(),rng.flt());
+  if (!hinfo.front) dir[2]*=-1.f; // flip to correct hemisphere
+  ℝ3 const i = hinfo.F.toBasis(dir);
   info.val = i;
   info.prob = .5f*inv_π<float>;
   float const radiance = al.radiance(l);
   info.mult = radiance;
   info.weight = 2.f*π<float>*radiance;
 }
-/// @todo probForAmbientLight
+/// @todo determine if 
+inline float probForAmbientLight(
+  float l,
+  cg::ambientlight const &al,
+  ray const &r)
+{
+  // if direction is in the same hemisphere, probability 1/2π
+  return 0.f;
+}
 
 /// @brief samples a point light at wavelength l
-/// @todo finish pointlight samping
 inline void pointlight(
   float l, 
   cg::pointlight const &pl, 
@@ -1088,17 +1095,30 @@ inline void pointlight(
   float const shadowing = 
     intersect::scene(sc,{hinfo.p+.05f*hinfo.n(),i},temp) ? 0.f : 1.f;
   info.mult = pl.radiant_intensity(l)*shadowing/(dist*dist);
+  info.weight = info.mult;
 }
-/// @todo probForPointLight
+constexpr float probForPointLight() {return 0.f;}
 
-/// @todo dirlight sampling
+/// @brief samples the radiant intensity coming from a direction light
 inline void dirlight(
   float l, 
   cg::dirlight const &dl,
   hitinfo const &hinfo,
   scene const &sc,
-  info<ℝ3,float> &info);
-/// @todo probForDirLight
+  info<ℝ3,float> &info)
+{
+  ℝ3 const i = -dl.dir;
+  info.val = i;
+  info.prob = 1.f;
+
+  // check shadowing
+  hitinfo temp;
+  float const shadowing = 
+    intersect::scene(sc,{hinfo.p+.05f*hinfo.n(),i},temp) ? 0.f : 1.f;
+  info.mult = dl.radiant_intensity(l)*shadowing;
+  info.weight = info.mult;
+}
+constexpr float probForDirLight() {return 0.f;}
 
 /// @brief uniformly samples the solid angle of a sphere light from a point
 inline void spherelight(
@@ -1169,6 +1189,8 @@ constexpr float probForLight(
 {
   return std::visit(Overload{
       [&](cg::spherelight const &sl){return probForSphereLight(sl,r);},
+      [&](cg::pointlight const &){return probForPointLight();},
+      [&](cg::dirlight const &){return probForDirLight();},
       [](auto const &){return 0.f;}
     }, *l);
 }
