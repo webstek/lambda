@@ -1,0 +1,41 @@
+{
+"camera": {
+  "pos": [0, -60, 12],
+  "look_at": [0, 0, 4],
+  "up": [0, 0, 1],
+  "fov": 30,
+  "ar": 1.778,
+  "width": 1280},
+"lights": [
+  {
+    "name": "sphere-light",
+    "type": "sphere",
+    "transform": {"translate": [0,6,0], "scale": [2,2,2]},
+    "radiance": 100.0}],
+"objects": [
+  {
+    "name": "teapot",
+    "type": "trimesh",
+    "transform": {"translate": [0,0,0], 
+                  "scale": [3,3,3], 
+                  "rotate": {"axis":[0,0,1], "degrees": 20}},
+    "material": "refractive",
+    "source": "scenes/teapot_2.obj"}],
+"materials": [
+  {
+    "name": "reflective",
+    "type": "blinn",
+    "Ks": 0.9,
+    "glossiness": 128},
+  {
+    "name": "refractive",
+    "type": "blinn",
+    "glossiness": 2048,
+    "Kt": 0.9,
+    "ior": "scenes/austin_mat.csv"},
+  {"name":"red","type":"lambertian","albedo":"scenes/dupont_red_orange_21.csv"},
+  {"name":"blue", "type":"lambertian","albedo": "scenes/dupont_blue_34.csv"},
+  {"name":"white", "type":"lambertian", "albedo": 1.00},
+  {"name":"gray",  "type":"lambertian", "albedo":"scenes/floor.csv"},
+  {"name":"grey","type": "lambertian","albedo": 0.2}]
+}
