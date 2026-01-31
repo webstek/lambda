@@ -10,7 +10,7 @@
   {
     "name": "sphere-light",
     "type": "sphere",
-    "transform": {"translate": [0,6,0], "scale": [2,2,2]},
+    "transform": {"translate": [0,12,32], "scale": [12,12,12]},
     "radiance": 100.0}],
 "objects": [
   {
@@ -20,7 +20,12 @@
                   "scale": [3,3,3], 
                   "rotate": {"axis":[0,0,1], "degrees": 20}},
     "material": "refractive",
-    "source": "scenes/teapot_2.obj"}],
+    "source": "scenes/teapot_2.obj"},
+    {
+    "name": "wall-bot",
+    "type": "plane",
+    "transform": {"scale": [32, 32, 1]},
+    "material": "grey"}],
 "materials": [
   {
     "name": "reflective",
@@ -30,7 +35,8 @@
   {
     "name": "refractive",
     "type": "blinn",
-    "glossiness": 2048,
+    "glossiness": 512,
+    "Kd": 0.01,
     "Kt": 0.9,
     "ior": "scenes/austin_mat.csv"},
   {"name":"red","type":"lambertian","albedo":"scenes/dupont_red_orange_21.csv"},

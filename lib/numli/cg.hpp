@@ -445,22 +445,102 @@ constexpr ℝ3 transmit(ℝ3 const &o, ℝ3 const &n, float ior)
 struct aabb
 {
   ℝ3 inf, sup;
+  void init() { inf=1e30f; sup=-1e30f; }
+  void operator+=(aabb const &b) 
+  {
+    for (int i=0; i<3; i++) 
+      { inf[i]=min(inf[i],b.inf[i]); sup[i]=max(sup[i],b.sup[i]); }
+  }
 };
 struct triangle
 {
   uint32_t V[3], N[3], u[3];
 };
 
-/// @todo bvh
-template <typename T> struct bvh 
+/// @brief generic BVH over primatives T with mapping from T to aabb bbFunc
+/// @tparam T type of the primatives to index over
+/// @tparam bbFunc callable mapping from T to aabb for each T
+/// @tparam centerFunc callable mapping from T to centroid for each T
+/// @warning Leaf nodes can have up to 8 primatives in them
+template <typename T, typename bbFunc, typename centerFunc> struct bvh 
 {
+  struct bvhnode 
+  {
+    aabb child_bb[8]; ///< bounding box of each child node
+    static const uint32_t IDX_MASK   = 0xfffffff0;
+    static const uint32_t COUNT_MASK = 0x0000000e;
+    static const uint32_t LEAF_MASK  = 0x00000001;
+    uint32_t data;
 
+    // idx and count: 
+    // index and number of children (internal node) or prims (leaf node)
+    inline uint32_t idx() const { return (IDX_MASK&data)>>4; }
+    inline uint8_t count() const { return ((COUNT_MASK&data)>>1)+1; }
+    inline bool is_leaf() const { return (LEAF_MASK&data) == 1; }
+
+    bvhnode(aabb box, uint32_t idx, uint8_t count, bool leaf)
+      { bb = box; data = (idx<<4) | (count<<1) | (leaf ? 1 : 0); }
+  };
+
+  struct bvhbuildnode
+  {
+    aabb bb;
+    std::array<bvhbuildnode,8> children;
+    uint8_t n_children;
+    std::vector<uint32_t> prim_idxs;
+
+    bvhbuildnode(aabb const &box, std::vector<uint32_t> const &idxs) 
+      { bb=box; prim_idxs=idxs; }
+
+    /// @brief splits this buildnode into 8 child nodes
+    /// @details enumerates octants of bb in order of zyx, uses mid-point split
+    void split()
+    {
+      // find splitting planes
+      ℝ3 const o = .5f*(bb.sup+bb.inf);
+      z=o[2]; // z mid-point
+      y=o[1]; // y mid-point
+      x=o[0]; // x mid-point
+
+      for (uint32_t e : prim_idxs) 
+      { // iterate through elements
+        ℝ3 const &c = centroidof(e);
+
+        /// @todo determine quadrant, add to correct child
+      }
+    }
+  };
+
+  std::vector<T> const &prims;   ///< ref to vector of primitives
+  std::vector<uint32_t> prim_idxs; ///< indices into primitive array
+  std::vector<bvhnode> nodes;    ///< tree structure stored as array
+
+  /// @brief builds the bvh
+  /// @param N number of prims the current node needs to split
+  /// @param aabbof function returning the aabb of the given primative
+  /// @param centerof function returning the centroid of the given primative
+  void build(uint32_t N, bbFunc&& aabbof, centerFunc&& centroidof)
+  {
+    if (N==0) return;
+    aabb bb;
+    bb.init();
+    for (int i=0;i<N;i++)
+    {
+      bb += aabbof(prims[i]);
+      prim_idxs.push_back(i);
+    }
+    bvhbuildnode *temp_root = new bvhbuildnode(bb, prim_idxs);
+    temp_root->split();
+    convertbuildnodes();
+    delete temp_root;
+  }
+
+  bvh(std::vector<T> const &primatives) { prims = primatives; };
 };
 
 struct trimeshdata : item
 {
   aabb bounds;
-  bvh<triangle>         _bvh;  ///< bvh over triangles F
   std::vector<ℝ3>       V;     ///< vertices
   std::vector<ℝ3>       N;     ///< vertex normals
   std::vector<ℝ3>       T;     ///< vertex tangent vectors
@@ -468,6 +548,24 @@ struct trimeshdata : item
   std::vector<ℝ3>       GN;    ///< face normals
   std::vector<ℝ3>       GT;    ///< face tangents
   std::vector<triangle> F;     ///< faces (triangles)
+  std::function<aabb(triangle const&)> aabboftri = [&](triangle const &tri)
+  {
+    aabb bb; 
+    bb.init(); 
+    for(int k=0;k<3;k++)
+    {
+      ℝ3 const &v = V[tri.V[k]];
+      for (int i=0;i<3;i++) 
+        { bb.inf[i]=min(bb.inf[i],v[i]); bb.sup[i]=max(bb.sup[i],v[i]); }
+    }
+    return bb;
+  };
+  std::function<ℝ3(triangle const&)> centroidoftri = [&](triangle const &tri)
+  {
+    ℝ3 centroid(0.f);
+    return (1.f/3.f)*(V[tri.V[0]]+V[tri.V[1]]+V[tri.V[2]]);
+  };
+  bvh<triangle, decltype(aabboftri), decltype(centroidoftri)> _bvh;
   constexpr ℝ3 const& v(uint32_t face, int i) const {return V[F[face].V[i]];}
   constexpr ℝ3 const& t(uint32_t face, int i) const {return T[F[face].N[i]];}
   constexpr ℝ2 const& uv(uint32_t face, int i) const {return u[F[face].u[i]];}
@@ -488,6 +586,8 @@ struct trimeshdata : item
     triangle const &tri = F[face];
     return b[0]*u[tri.u[0]]+b[1]*u[tri.u[1]]+b[2]*u[tri.u[2]];
   }
+
+  trimeshdata() : _bvh(F) {}
 };
 // ** end of structures ***************
 
@@ -745,7 +845,8 @@ struct scene
 {
   // main interface components
   camera      cam;
-  bvh<Object> obvh;
+  /// @todo provide Object aabb function for obvh
+  // bvh<Object, > obvh;
 
   // shared storage
   list<Object>   objects;
