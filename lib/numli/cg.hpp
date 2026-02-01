@@ -290,10 +290,13 @@ struct ray
 {
   ℝ3 p;
   ℝ3 u;
+  ℝ3 inv_u;
   ray() {}
-  ray(ℝ3 const &p, ℝ3 const &u) : p(p), u(u) {}
+  ray(ℝ3 const &p, ℝ3 const &u) : p(p), u(u) 
+    { for (int i=0;i<3;i++) inv_u[i]=1.f/u[i]; }
   ray(ℝ4 const &p, ℝ4 const &u) : 
-    p({p.elem[0],p.elem[1],p.elem[2]}), u({u.elem[0],u.elem[1],u.elem[2]}) {}
+    p({p.elem[0],p.elem[1],p.elem[2]}), u({u.elem[0],u.elem[1],u.elem[2]}) 
+    { for (int i=0;i<3;i++) inv_u[i]=1.f/u[i]; }
   constexpr ℝ3 operator()(float t) const { return p+t*u; }
   constexpr std::array<float,6> plucker() const
     { ℝ3 const m = p^u; return {u[0],u[1],u[2],m[0],m[1],m[2]}; }
@@ -459,7 +462,8 @@ struct triangle
 };
 
 
-/// @name BVH node data bit masks
+/// @name BVH constants
+constexpr uint8_t PRIM_PER_LEAF = 4;
 constexpr uint32_t IDX_MASK   = 0xfffffff0;
 constexpr uint32_t COUNT_MASK = 0x0000000e;
 constexpr uint32_t LEAF_MASK  = 0x00000001;
@@ -534,7 +538,7 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
     n_nodes++;
 
     // check if this node should be a leaf node
-    if (node->prim_idxs.size() <= 8) { node->leaf=true; return; }
+    if (node->prim_idxs.size() <= PRIM_PER_LEAF) { node->leaf=true; return; }
 
     // find splitting axis
     ℝ3 const l = node->bb.sup-node->bb.inf;
@@ -1067,9 +1071,9 @@ constexpr bool plane(cg::plane const &p, ray const &w_ray, hitinfo &hinfo)
 /// @brief aabb intersection
 constexpr float aabb(cg::aabb const &bb, ray const &l_ray, float t_max)
 {
-  float const inv_x = 1.f/l_ray.u[0];
-  float const inv_y = 1.f/l_ray.u[1];
-  float const inv_z = 1.f/l_ray.u[2];
+  float const inv_x = l_ray.inv_u[0];
+  float const inv_y = l_ray.inv_u[1];
+  float const inv_z = l_ray.inv_u[2];
   float t0x = (bb.inf[0]-l_ray.p[0])*inv_x;
   float t1x = (bb.sup[0]-l_ray.p[0])*inv_x;
   float t0y = (bb.inf[1]-l_ray.p[1])*inv_y;
@@ -1083,6 +1087,16 @@ constexpr float aabb(cg::aabb const &bb, ray const &l_ray, float t_max)
   float const tmax = min(t1x,min(t1y,t1z));
   if (tmax<BIAS || tmax<=tmin || tmin>t_max) return UB<float>;
   return tmin<BIAS ? tmax : tmin;
+}
+
+/// @brief 8 aabb intersection using avx2 registers
+/// @param bb array of bounding boxes
+/// @param l_ray local ray to intersect with bbs
+/// @param t_max maximum distance along ray to consider for intersections
+TARGET_AVX2 inline void aabb_avx2(
+  cg::aabb const (&bb)[8], ray const &l_ray, float t_max)
+{
+
 }
 
 /// @brief Triangle-Ray intersection
@@ -1215,8 +1229,6 @@ constexpr bool trimesh(
       hit_any |= trimeshdata_koi(BVH.primOf(node,i), mesh, l_ray, hinfo);
     }
   }
-
-  for (int i=0;i<n_faces;i++) {hit_any|=trimeshdata_koi(i,mesh,l_ray,hinfo);}
   if (!hit_any) return false;
 
   // convert hinfo to world-space

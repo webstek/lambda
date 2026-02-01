@@ -1,24 +1,24 @@
 {
 "camera": {
-  "pos": [0, -60, 20],
+  "pos": [0, 15, 15],
   "look_at": [0, 0, 0],
   "up": [0, 0, 1],
-  "fov": 30,
+  "fov": 60,
   "ar": 1.778,
   "width": 1280},
 "lights": [
   {
     "name": "sphere-light",
     "type": "sphere",
-    "transform": {"translate": [-70,70,32], "scale": [50,50,50]},
-    "radiance": 10.0}],
+    "transform": {"translate": [-70,70,40], "scale": [50,50,50]},
+    "radiance": 40.0}],
 "objects": [
   {
-    "name": "teapot",
+    "name": "rect-prism",
     "type": "trimesh",
     "transform": {"translate": [0,0,0], 
-                  "scale": [3,3,3], 
-                  "rotate": {"axis":[0,0,1], "degrees": 20}},
+                  "scale": [2,2,2], 
+                  "rotate": {"axis":[0,0,1], "degrees": 0}},
     "material": "refractive",
     "source": "scenes/teapot_6.obj"},
   {

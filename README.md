@@ -1,26 +1,19 @@
 # λ (Lambda)
-A C++ Spectral Path Tracer (hopefully) using my library numli
+A C++ Spectral Path Tracer using my library numli
 
 ## Features
-* Path tracing supporting Blinn and Lambertian material models. Renders spheres
-and planes.
+* Spectral path tracing supporting Blinn and Lambertian material models.
 * Scene definition in `.nls` files
 
 ## Building
 From the project root invoke `make [debug, release]` for debug or release 
 
 ## Usage
-Navigate to `bin/`, call `./lambda` to perform a rendering. To change the SPP,
-maximum scatterings per path, and scatter sampling chance, edit `renderer.cpp`
-directly and rebuild. To change the scene, edit `main.cpp` directly and 
-rebuild.
+Navigate to `bin/`, call `./lambda <fpath> -s <SPP> -b <MAX_BOUNCES> -p <BOUNCE_PROB>` for rendering.
+
 
 ## Future Work
-* Command line arguments
-* HPC script
 * Anisotropic material
-* Spectral rendering
-* Triangle meshes + BVH
 * Absorption
 * Textures
 * loading `gltf` scenes linked in `.nls` files
