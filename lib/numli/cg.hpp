@@ -458,6 +458,12 @@ struct triangle
   uint32_t V[3], N[3], u[3];
 };
 
+
+/// @name BVH node data bit masks
+constexpr uint32_t IDX_MASK   = 0xfffffff0;
+constexpr uint32_t COUNT_MASK = 0x0000000e;
+constexpr uint32_t LEAF_MASK  = 0x00000001;
+
 /// @brief generic BVH over primatives T with mapping from T to aabb bbFunc
 /// @tparam T type of the primatives to index over
 /// @tparam bbFunc callable mapping from T to aabb for each T
@@ -484,9 +490,6 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
   struct bvhnode 
   {
     aabb *child_bb; ///< bounding box of each child node or nullptr if leaf
-    static const uint32_t IDX_MASK   = 0xfffffff0;
-    static const uint32_t COUNT_MASK = 0x0000000e;
-    static const uint32_t LEAF_MASK  = 0x00000001;
     uint32_t data;
 
     // idx and count: 
@@ -496,8 +499,22 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
     inline bool isLeaf() const { return (LEAF_MASK&data) == 1; }
 
     /// @warning count must be between 1 and 8
+    bvhnode() : child_bb(nullptr), data(0) {}
     bvhnode(aabb *bbs, uint32_t idx, uint8_t count, bool leaf)
       { child_bb=bbs; data = (idx<<4) | ((count-1)<<1) | (leaf ? 1 : 0); }
+    bvhnode(bvhnode&& o) noexcept : child_bb(o.child_bb), data(o.data)
+      { o.child_bb = nullptr; }
+    bvhnode& operator=(bvhnode&& o) noexcept 
+    {
+      if (this!=&o) 
+      {
+        delete[] child_bb; 
+        child_bb=o.child_bb; 
+        o.child_bb=nullptr; 
+        data=o.data;
+      }
+      return *this;
+    }
     ~bvhnode() { if (child_bb) delete[] child_bb; }
   };
 
@@ -526,11 +543,28 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
     if (l[2]>l[1] && l[2]>l[0]) i=2;
 
     std::vector<uint32_t> child_prims[8];
-    for (uint32_t e : node->prim_idxs) 
+    for (uint32_t e : node->prim_idxs)
     { // iterate through elements
       float c = centroidof(prims[e])[i];
       int bin = min(7,int(8*(c-node->bb.inf[i])/l[i]));
       child_prims[bin].push_back(e);
+    }
+
+    size_t n = node->prim_idxs.size();
+    for (int bin = 0; bin < 8; bin++)
+    { // check for bin with all triangles
+      if (child_prims[bin].size() != n) continue; // good bin
+      
+      std::vector<uint32_t> temp = std::move(child_prims[bin]);
+      size_t chunk_size = (n+7)/8;
+      for (int b=0; b<8; b++)
+      { // distribute across children
+        size_t start = b*chunk_size;
+        size_t end = min(start+chunk_size, n);
+        if (start < end) child_prims[b] = 
+          std::vector<uint32_t>(temp.begin()+start, temp.begin()+end);
+      }
+      break; // done redistributing
     }
 
     for (int bin=0; bin<8; bin++)
@@ -538,7 +572,7 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
       if (child_prims[bin].empty()) continue;
       aabb child_bb;
       child_bb.init();
-      for (uint32_t idx : child_prims[bin]) {child_bb += aabbof(prims[idx]);}
+      for (uint32_t idx : child_prims[bin]) { child_bb += aabbof(prims[idx]); }
       node->children[bin] = new bvhbuildnode(child_bb, child_prims[bin]);
       splitbuildnode(node->children[bin]);
     }
@@ -546,16 +580,18 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
 
   /// @brief converts the bvh from buildnodes to nodes
   /// @param root pointer to root buildnode
-  void convertbuildnodes(bvhbuildnode *root)
+  /// @param N number of nodes in the conversion
+  void convertbuildnodes(bvhbuildnode *root, uint32_t N)
   {
-    if (root==nullptr) return;
+    nodes.resize(N);
 
-    std::queue<bvhbuildnode*> queue;
-    queue.push(root);
+    std::queue<std::pair<bvhbuildnode*,uint32_t>> queue; // node, index
+    queue.push({root, 0});
+    uint32_t next_free = 1; // 0 reserved for root
 
     while (!queue.empty())
     { // breadth-first traveral of bvhbuildnode tree
-      bvhbuildnode *node = queue.front();
+      auto [node, idx] = queue.front();
       queue.pop();
 
       if (node->leaf)
@@ -563,24 +599,25 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
         uint32_t prim_idx = prim_idxs.size();
         uint8_t count = node->prim_idxs.size();
         for (uint32_t idx : node->prim_idxs) { prim_idxs.push_back(idx); }
-        nodes.emplace_back(nullptr, prim_idx, count, true);
+        nodes[idx] = {nullptr, prim_idx, count, true};
       } else 
       { // interior node, compute child_bb, meta, recurse on children
-        uint32_t first_child_idx = nodes.size()+1;
+        uint32_t first_child_idx = next_free;
         uint8_t n_child = 0;
         aabb bbs[8];
         for (int i=0; i<8; i++)
-        {
+        { // check each potential child
           if (node->children[i])
-          {
+          { // if there is a child there
             bbs[n_child] = node->children[i]->bb;
+            queue.push({node->children[i], next_free+n_child});
             n_child++;
-            queue.push(node->children[i]);
           }
         }
+        next_free += n_child;
         aabb *child_bbs = new aabb[n_child];
         for (int i=0;i<n_child;i++) child_bbs[i] = bbs[i];
-        nodes.emplace_back(child_bbs, first_child_idx, n_child, false);
+        nodes[idx] = {child_bbs, first_child_idx, n_child, false};
       }
     }
   }
@@ -600,8 +637,7 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
     }
     bvhbuildnode *temp_root = new bvhbuildnode(bb, temp_idxs);
     splitbuildnode(temp_root);
-    nodes.reserve(n_nodes);
-    convertbuildnodes(temp_root);
+    convertbuildnodes(temp_root, n_nodes);
     delete temp_root;
   }
 
@@ -630,7 +666,7 @@ struct trimeshdata : item
   std::vector<ℝ3>       GN;    ///< face normals
   std::vector<ℝ3>       GT;    ///< face tangents
   std::vector<triangle> F;     ///< faces (triangles)
-  std::function<aabb(triangle const&)> aabboftri = [&](triangle const &tri)
+  std::function<aabb(triangle const&)> aabboftri=[&](triangle const &tri)
   {
     aabb bb; 
     bb.init(); 
@@ -642,7 +678,7 @@ struct trimeshdata : item
     }
     return bb;
   };
-  std::function<ℝ3(triangle const&)> centroidoftri = [&](triangle const &tri)
+  std::function<ℝ3(triangle const&)> centroidoftri=[&](triangle const &tri)
   {
     ℝ3 centroid(0.f);
     return (1.f/3.f)*(V[tri.V[0]]+V[tri.V[1]]+V[tri.V[2]]);
@@ -671,6 +707,11 @@ struct trimeshdata : item
   }
 
   trimeshdata() : _bvh(F, aabboftri, centroidoftri) {}
+  trimeshdata(trimeshdata&& o) noexcept
+    : item(std::move(o)), bounds(o.bounds), 
+    V(std::move(o.V)), N(std::move(o.N)), T(std::move(o.T)), u(std::move(o.u)),
+    GN(std::move(o.GN)), GT(std::move(o.GT)), F(std::move(o.F)), 
+    _bvh(std::move(o._bvh)) {}
 };
 // ** end of structures ***************
 
@@ -1147,14 +1188,15 @@ constexpr bool trimesh(
 
   while (sp > 0)
   { // traverse bvh depth first
-    const auto& [node, t] = stack[sp--];
+    const auto& [node, t] = stack[--sp];
     if (t > hinfo.z) continue;  // hit behind closest hit so far, skip
 
     if (!BVH.leafNode(node))
     { // if node is internal, push intersected children onto stack
       uint8_t n_intersections = 0;
       std::array<std::pair<uint32_t,float>,8> vals;
-      for (uint8_t c=0; c<BVH.count(node); c++)
+      uint8_t n_children = BVH.count(node);
+      for (uint8_t c=0; c<n_children; c++)
       { // get children t-values
         float t_child = aabb(BVH.childAABB(node,c), l_ray, hinfo.z);
         if (t_child == UB<float>) vals[c] = {UB<uint32_t>, 0.f};
@@ -1686,7 +1728,7 @@ inline void loadSphereLight(
   if (mat==mats.size()) 
   {
     emitter m = {name, light.radiance}; 
-    mats.emplace_back(std::in_place_type<emitter>, m);
+    mats.emplace_back(std::in_place_type<emitter>, std::move(m));
   }
   s.mat = mat;
   light.size = sx;
@@ -1709,7 +1751,7 @@ inline void loadLights(
       ambientlight l; 
       l.name=name; 
       loadAmbientLight(l, j_light); 
-      scene.lights.emplace_back(std::in_place_type<ambientlight>,l);
+      scene.lights.emplace_back(std::in_place_type<ambientlight>,std::move(l));
       break;
     }
     case LightType::POINT: 
@@ -1717,7 +1759,7 @@ inline void loadLights(
       pointlight l;
       l.name=name;
       loadPointLight(l, j_light);
-      scene.lights.emplace_back(std::in_place_type<pointlight>,l);
+      scene.lights.emplace_back(std::in_place_type<pointlight>,std::move(l));
       break;
     }
     case LightType::DIR: 
@@ -1725,7 +1767,7 @@ inline void loadLights(
       dirlight l;
       l.name=name;
       loadDirLight(l, j_light);
-      scene.lights.emplace_back(std::in_place_type<dirlight>,l);
+      scene.lights.emplace_back(std::in_place_type<dirlight>,std::move(l));
       break;
     }
     case LightType::SPHERE:
@@ -1734,8 +1776,10 @@ inline void loadLights(
       light.name=name;
       loadSphereLight(light, j_light, scene.materials);
       light._sphere.obj = scene.objects.size();
-      scene.objects.emplace_back(std::in_place_type<sphere>,light._sphere);
-      scene.lights.emplace_back(std::in_place_type<spherelight>,light);
+      scene.objects.emplace_back(
+        std::in_place_type<sphere>,std::move(light._sphere));
+      scene.lights.emplace_back(
+        std::in_place_type<spherelight>,std::move(light));
       break;
     }
     } // end switch
@@ -1855,7 +1899,7 @@ inline void loadTriMesh(
     mesh_data.name = fpath;
     loadTriMeshFromFile(mesh_data,fpath);
     mesh_data.buildBVH();
-    meshes.emplace_back(std::in_place_type<trimeshdata>, mesh_data);
+    meshes.emplace_back(std::in_place_type<trimeshdata>, std::move(mesh_data));
   }
 }
 
@@ -1883,7 +1927,7 @@ inline void loadObjects(
       s.name=name; 
       loadSphere(s, j_obj, mats);
       s.obj = objs.size();
-      objs.emplace_back(std::in_place_type<sphere>, s); 
+      objs.emplace_back(std::in_place_type<sphere>, std::move(s)); 
       break;
     }
     case ObjectType::PLANE:
@@ -1892,7 +1936,7 @@ inline void loadObjects(
       p.name=name; 
       loadPlane(p, j_obj, mats);
       p.obj = objs.size();
-      objs.emplace_back(std::in_place_type<plane>, p); 
+      objs.emplace_back(std::in_place_type<plane>, std::move(p)); 
       break;
     }
     case ObjectType::TRIMESH:
@@ -1901,7 +1945,7 @@ inline void loadObjects(
       m.name=name;
       loadTriMesh(m, meshes, j_obj, mats);
       m.obj = objs.size();
-      objs.emplace_back(std::in_place_type<trimesh>, m);
+      objs.emplace_back(std::in_place_type<trimesh>, std::move(m));
       break;
     }
     }
