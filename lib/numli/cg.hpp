@@ -13,6 +13,7 @@
 #include <variant>
 #include <vector>
 #include <map>
+#include <queue>
 #include <string>
 #include <fstream>
 
@@ -464,9 +465,25 @@ struct triangle
 /// @warning Leaf nodes can have up to 8 primatives in them
 template <typename T, typename bbFunc, typename centerFunc> struct bvh 
 {
+  /// @name mappings from primative T to aabb or centroid
+  bbFunc aabbof;
+  centerFunc centroidof;
+
+  struct bvhbuildnode
+  {
+    aabb bb;
+    std::array<bvhbuildnode*,8> children{};
+    std::vector<uint32_t> prim_idxs;
+    bool leaf = false;
+
+    bvhbuildnode(aabb const &box, std::vector<uint32_t> const &idxs) 
+      { bb=box; prim_idxs=idxs; }
+    ~bvhbuildnode() { for (auto child : children) delete child; }
+  };
+
   struct bvhnode 
   {
-    aabb child_bb[8]; ///< bounding box of each child node
+    aabb *child_bb; ///< bounding box of each child node or nullptr if leaf
     static const uint32_t IDX_MASK   = 0xfffffff0;
     static const uint32_t COUNT_MASK = 0x0000000e;
     static const uint32_t LEAF_MASK  = 0x00000001;
@@ -476,66 +493,131 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
     // index and number of children (internal node) or prims (leaf node)
     inline uint32_t idx() const { return (IDX_MASK&data)>>4; }
     inline uint8_t count() const { return ((COUNT_MASK&data)>>1)+1; }
-    inline bool is_leaf() const { return (LEAF_MASK&data) == 1; }
+    inline bool isLeaf() const { return (LEAF_MASK&data) == 1; }
 
-    bvhnode(aabb box, uint32_t idx, uint8_t count, bool leaf)
-      { bb = box; data = (idx<<4) | (count<<1) | (leaf ? 1 : 0); }
+    /// @warning count must be between 1 and 8
+    bvhnode(aabb *bbs, uint32_t idx, uint8_t count, bool leaf)
+      { child_bb=bbs; data = (idx<<4) | ((count-1)<<1) | (leaf ? 1 : 0); }
+    ~bvhnode() { if (child_bb) delete[] child_bb; }
   };
 
-  struct bvhbuildnode
+  std::vector<T> const &prims;     ///< ref to vector of primitives
+  std::vector<uint32_t> prim_idxs; ///< indices into prims array
+  std::vector<bvhnode> nodes;      ///< tree structure stored as array
+  uint32_t n_nodes = 0;
+
+  /////////////////////////////////////
+  /// @name member functions
+
+  /// @brief splits this buildnode into 8 child nodes
+  /// @details splits the bb into 8 boxes along the longest axis
+  void splitbuildnode(bvhbuildnode *node)
   {
-    aabb bb;
-    std::array<bvhbuildnode,8> children;
-    uint8_t n_children;
-    std::vector<uint32_t> prim_idxs;
+    if (node==nullptr) return;
+    n_nodes++;
 
-    bvhbuildnode(aabb const &box, std::vector<uint32_t> const &idxs) 
-      { bb=box; prim_idxs=idxs; }
+    // check if this node should be a leaf node
+    if (node->prim_idxs.size() <= 8) { node->leaf=true; return; }
 
-    /// @brief splits this buildnode into 8 child nodes
-    /// @details enumerates octants of bb in order of zyx, uses mid-point split
-    void split()
-    {
-      // find splitting planes
-      ℝ3 const o = .5f*(bb.sup+bb.inf);
-      z=o[2]; // z mid-point
-      y=o[1]; // y mid-point
-      x=o[0]; // x mid-point
+    // find splitting axis
+    ℝ3 const l = node->bb.sup-node->bb.inf;
+    uint8_t i=0;
+    if (l[1]>l[0]) i=1;
+    if (l[2]>l[1] && l[2]>l[0]) i=2;
 
-      for (uint32_t e : prim_idxs) 
-      { // iterate through elements
-        ℝ3 const &c = centroidof(e);
+    std::vector<uint32_t> child_prims[8];
+    for (uint32_t e : node->prim_idxs) 
+    { // iterate through elements
+      float c = centroidof(prims[e])[i];
+      int bin = min(7,int(8*(c-node->bb.inf[i])/l[i]));
+      child_prims[bin].push_back(e);
+    }
 
-        /// @todo determine quadrant, add to correct child
+    for (int bin=0; bin<8; bin++)
+    { // check for empty, compute aabb, recurse
+      if (child_prims[bin].empty()) continue;
+      aabb child_bb;
+      child_bb.init();
+      for (uint32_t idx : child_prims[bin]) {child_bb += aabbof(prims[idx]);}
+      node->children[bin] = new bvhbuildnode(child_bb, child_prims[bin]);
+      splitbuildnode(node->children[bin]);
+    }
+  }
+
+  /// @brief converts the bvh from buildnodes to nodes
+  /// @param root pointer to root buildnode
+  void convertbuildnodes(bvhbuildnode *root)
+  {
+    if (root==nullptr) return;
+
+    std::queue<bvhbuildnode*> queue;
+    queue.push(root);
+
+    while (!queue.empty())
+    { // breadth-first traveral of bvhbuildnode tree
+      bvhbuildnode *node = queue.front();
+      queue.pop();
+
+      if (node->leaf)
+      { // leaf node, store primative indices
+        uint32_t prim_idx = prim_idxs.size();
+        uint8_t count = node->prim_idxs.size();
+        for (uint32_t idx : node->prim_idxs) { prim_idxs.push_back(idx); }
+        nodes.emplace_back(nullptr, prim_idx, count, true);
+      } else 
+      { // interior node, compute child_bb, meta, recurse on children
+        uint32_t first_child_idx = nodes.size()+1;
+        uint8_t n_child = 0;
+        aabb bbs[8];
+        for (int i=0; i<8; i++)
+        {
+          if (node->children[i])
+          {
+            bbs[n_child] = node->children[i]->bb;
+            n_child++;
+            queue.push(node->children[i]);
+          }
+        }
+        aabb *child_bbs = new aabb[n_child];
+        for (int i=0;i<n_child;i++) child_bbs[i] = bbs[i];
+        nodes.emplace_back(child_bbs, first_child_idx, n_child, false);
       }
     }
-  };
-
-  std::vector<T> const &prims;   ///< ref to vector of primitives
-  std::vector<uint32_t> prim_idxs; ///< indices into primitive array
-  std::vector<bvhnode> nodes;    ///< tree structure stored as array
+  }
 
   /// @brief builds the bvh
   /// @param N number of prims the current node needs to split
-  /// @param aabbof function returning the aabb of the given primative
-  /// @param centerof function returning the centroid of the given primative
-  void build(uint32_t N, bbFunc&& aabbof, centerFunc&& centroidof)
+  void build(uint32_t N)
   {
     if (N==0) return;
     aabb bb;
     bb.init();
-    for (int i=0;i<N;i++)
+    std::vector<uint32_t> temp_idxs;
+    for (uint32_t i=0;i<N;i++)
     {
       bb += aabbof(prims[i]);
-      prim_idxs.push_back(i);
+      temp_idxs.push_back(i);
     }
-    bvhbuildnode *temp_root = new bvhbuildnode(bb, prim_idxs);
-    temp_root->split();
-    convertbuildnodes();
+    bvhbuildnode *temp_root = new bvhbuildnode(bb, temp_idxs);
+    splitbuildnode(temp_root);
+    nodes.reserve(n_nodes);
+    convertbuildnodes(temp_root);
     delete temp_root;
   }
 
-  bvh(std::vector<T> const &primatives) { prims = primatives; };
+  uint32_t root() const { return 0; }
+  bool leafNode(uint32_t node) const { return nodes[node].isLeaf(); }
+  uint8_t count(uint32_t node) const { return nodes[node].count(); }
+  const aabb& childAABB(uint32_t node, uint8_t child) const 
+    { return nodes[node].child_bb[child]; }
+  uint32_t childOf(uint32_t node, uint8_t child) const 
+    { return nodes[node].idx()+child; }
+  uint32_t primOf(uint32_t node, uint8_t i) const 
+    { return prim_idxs[nodes[node].idx()+i]; }
+
+
+  bvh(std::vector<T> const &primatives, bbFunc f, centerFunc g) 
+    : aabbof(f), centroidof(g), prims(primatives) {}
 };
 
 struct trimeshdata : item
@@ -566,6 +648,7 @@ struct trimeshdata : item
     return (1.f/3.f)*(V[tri.V[0]]+V[tri.V[1]]+V[tri.V[2]]);
   };
   bvh<triangle, decltype(aabboftri), decltype(centroidoftri)> _bvh;
+  void buildBVH() { _bvh.build(F.size()); }
   constexpr ℝ3 const& v(uint32_t face, int i) const {return V[F[face].V[i]];}
   constexpr ℝ3 const& t(uint32_t face, int i) const {return T[F[face].N[i]];}
   constexpr ℝ2 const& uv(uint32_t face, int i) const {return u[F[face].u[i]];}
@@ -587,7 +670,7 @@ struct trimeshdata : item
     return b[0]*u[tri.u[0]]+b[1]*u[tri.u[1]]+b[2]*u[tri.u[2]];
   }
 
-  trimeshdata() : _bvh(F) {}
+  trimeshdata() : _bvh(F, aabboftri, centroidoftri) {}
 };
 // ** end of structures ***************
 
@@ -1052,9 +1135,45 @@ constexpr bool trimesh(
   ray const l_ray = tmesh.T.toLocal(w_ray);
 
   /// bounding box check
-  if (aabb(mesh.bounds, l_ray, hinfo.z) == UB<float>) return false;
+  float t = aabb(mesh.bounds, l_ray, hinfo.z);
+  if (t == UB<float>) return false;
 
-  /// @todo bvh acceleration
+  // bvh traversal
+  const auto &BVH = mesh._bvh;
+  static constexpr uint8_t STACK_SIZE = 64;
+  uint8_t sp = 0;
+  std::pair<uint32_t, float> stack[STACK_SIZE]; ///< stack of pairs (node,t)
+  stack[sp++] = {BVH.root(), t};
+
+  while (sp > 0)
+  { // traverse bvh depth first
+    const auto& [node, t] = stack[sp--];
+    if (t > hinfo.z) continue;  // hit behind closest hit so far, skip
+
+    if (!BVH.leafNode(node))
+    { // if node is internal, push intersected children onto stack
+      uint8_t n_intersections = 0;
+      std::array<std::pair<uint32_t,float>,8> vals;
+      for (uint8_t c=0; c<BVH.count(node); c++)
+      { // get children t-values
+        float t_child = aabb(BVH.childAABB(node,c), l_ray, hinfo.z);
+        if (t_child == UB<float>) vals[c] = {UB<uint32_t>, 0.f};
+        else { vals[c] = {BVH.childOf(node,c), t_child}; n_intersections++; }
+      }
+      // sort vals array so that closest node is on top of the node stack
+      std::sort(vals.begin(),vals.end(),
+        [](auto a, auto b){return a.second > b.second;});
+      for (uint8_t i=0; i<n_intersections; i++) { stack[sp++] = vals[i]; }
+      continue;
+    }
+
+    const uint8_t count = BVH.count(node);
+    for (uint8_t i=0; i<count; i++)
+    { // leaf node, test for triangle intersection
+      hit_any |= trimeshdata_koi(BVH.primOf(node,i), mesh, l_ray, hinfo);
+    }
+  }
+
   for (int i=0;i<n_faces;i++) {hit_any|=trimeshdata_koi(i,mesh,l_ray,hinfo);}
   if (!hit_any) return false;
 
@@ -1166,15 +1285,7 @@ inline void ambientlight(
   info.mult = radiance;
   info.weight = 2.f*π<float>*radiance;
 }
-/// @todo determine if 
-inline float probForAmbientLight(
-  float l,
-  cg::ambientlight const &al,
-  ray const &r)
-{
-  // if direction is in the same hemisphere, probability 1/2π
-  return 0.f;
-}
+inline float probForAmbientLight() { return .5f*inv_π<float>; }
 
 /// @brief samples a point light at wavelength l
 inline void pointlight(
@@ -1292,6 +1403,7 @@ constexpr float probForLight(
       [&](cg::spherelight const &sl){return probForSphereLight(sl,r);},
       [&](cg::pointlight const &){return probForPointLight();},
       [&](cg::dirlight const &){return probForDirLight();},
+      [&](cg::ambientlight const &){return probForAmbientLight();},
       [](auto const &){return 0.f;}
     }, *l);
 }
@@ -1742,6 +1854,7 @@ inline void loadTriMesh(
     trimeshdata mesh_data;
     mesh_data.name = fpath;
     loadTriMeshFromFile(mesh_data,fpath);
+    mesh_data.buildBVH();
     meshes.emplace_back(std::in_place_type<trimeshdata>, mesh_data);
   }
 }
