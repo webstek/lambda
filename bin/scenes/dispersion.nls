@@ -1,7 +1,7 @@
 {
 "camera": {
-  "pos": [0, -60, 12],
-  "look_at": [0, 0, 4],
+  "pos": [0, -60, 20],
+  "look_at": [0, 0, 0],
   "up": [0, 0, 1],
   "fov": 30,
   "ar": 1.778,
@@ -10,8 +10,8 @@
   {
     "name": "sphere-light",
     "type": "sphere",
-    "transform": {"translate": [0,12,32], "scale": [12,12,12]},
-    "radiance": 100.0}],
+    "transform": {"translate": [-70,70,32], "scale": [50,50,50]},
+    "radiance": 10.0}],
 "objects": [
   {
     "name": "teapot",
@@ -21,7 +21,7 @@
                   "rotate": {"axis":[0,0,1], "degrees": 20}},
     "material": "refractive",
     "source": "scenes/teapot_2.obj"},
-    {
+  {
     "name": "wall-bot",
     "type": "plane",
     "transform": {"scale": [32, 32, 1]},
