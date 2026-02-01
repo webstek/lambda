@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file cg.hpp
 /// @author Kyle Webster
-/// @version 0.12
-/// @date 11 Dec 2025
+/// @version 0.17
+/// @date 02 Feb 2026 
 /// @brief Numerics Library - Computer Graphics - @ref cg
 /// @details
 /// Collection of computer graphics structures and algorithms
@@ -456,11 +456,29 @@ struct aabb
       { inf[i]=min(inf[i],b.inf[i]); sup[i]=max(sup[i],b.sup[i]); }
   }
 };
+struct aabb_avx2
+{
+  alignas(32) float inf0[8], sup0[8];
+  alignas(32) float inf1[8], sup1[8];
+  alignas(32) float inf2[8], sup2[8];
+  aabb_avx2(aabb (&bb)[8])
+  {
+    for (int i=0; i<8; i++) 
+    { // copy data from bb into member variables
+      inf0[i]=bb[i].inf[0];
+      inf1[i]=bb[i].inf[1];
+      inf2[i]=bb[i].inf[2];
+      sup0[i]=bb[i].sup[0];
+      sup1[i]=bb[i].sup[1];
+      sup2[i]=bb[i].sup[2];
+    }
+  }
+};
+
 struct triangle
 {
   uint32_t V[3], N[3], u[3];
 };
-
 
 /// @name BVH constants
 constexpr uint8_t PRIM_PER_LEAF = 4;
@@ -479,6 +497,9 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
   bbFunc aabbof;
   centerFunc centroidof;
 
+  /////////////////////////////////////
+  /// @name internal data structures
+
   struct bvhbuildnode
   {
     aabb bb;
@@ -493,7 +514,7 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
 
   struct bvhnode 
   {
-    aabb *child_bb; ///< bounding box of each child node or nullptr if leaf
+    uint32_t childrenbb_idx;
     uint32_t data;
 
     // idx and count: 
@@ -503,29 +524,21 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
     inline bool isLeaf() const { return (LEAF_MASK&data) == 1; }
 
     /// @warning count must be between 1 and 8
-    bvhnode() : child_bb(nullptr), data(0) {}
-    bvhnode(aabb *bbs, uint32_t idx, uint8_t count, bool leaf)
-      { child_bb=bbs; data = (idx<<4) | ((count-1)<<1) | (leaf ? 1 : 0); }
-    bvhnode(bvhnode&& o) noexcept : child_bb(o.child_bb), data(o.data)
-      { o.child_bb = nullptr; }
-    bvhnode& operator=(bvhnode&& o) noexcept 
-    {
-      if (this!=&o) 
-      {
-        delete[] child_bb; 
-        child_bb=o.child_bb; 
-        o.child_bb=nullptr; 
-        data=o.data;
-      }
-      return *this;
-    }
-    ~bvhnode() { if (child_bb) delete[] child_bb; }
+    bvhnode() : childrenbb_idx(UB<uint32_t>), data(0) {}
+    bvhnode(uint32_t bb_idx, uint32_t idx, uint8_t count, bool leaf) 
+      : childrenbb_idx(bb_idx)
+      { data = (idx<<4) | ((count-1)<<1) | (leaf ? 1 : 0); }
   };
+
+  /////////////////////////////////////
+  /// @name member variables
 
   std::vector<T> const &prims;     ///< ref to vector of primitives
   std::vector<uint32_t> prim_idxs; ///< indices into prims array
+  std::vector<aabb_avx2> bbs;      ///< bounding box storage
   std::vector<bvhnode> nodes;      ///< tree structure stored as array
   uint32_t n_nodes = 0;
+  uint32_t n_interior_nodes = 0;
 
   /////////////////////////////////////
   /// @name member functions
@@ -540,6 +553,9 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
     // check if this node should be a leaf node
     if (node->prim_idxs.size() <= PRIM_PER_LEAF) { node->leaf=true; return; }
 
+    // must be an interior node
+    n_interior_nodes++;
+
     // find splitting axis
     ℝ3 const l = node->bb.sup-node->bb.inf;
     uint8_t i=0;
@@ -549,7 +565,7 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
     std::vector<uint32_t> child_prims[8];
     for (uint32_t e : node->prim_idxs)
     { // iterate through elements
-      float c = centroidof(prims[e])[i];
+      float c = centroidof(prims[e],i);
       int bin = min(7,int(8*(c-node->bb.inf[i])/l[i]));
       child_prims[bin].push_back(e);
     }
@@ -584,10 +600,10 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
 
   /// @brief converts the bvh from buildnodes to nodes
   /// @param root pointer to root buildnode
-  /// @param N number of nodes in the conversion
-  void convertbuildnodes(bvhbuildnode *root, uint32_t N)
+  void convertbuildnodes(bvhbuildnode *root)
   {
-    nodes.resize(N);
+    nodes.resize(n_nodes);
+    bbs.resize(n_interior_nodes);
 
     std::queue<std::pair<bvhbuildnode*,uint32_t>> queue; // node, index
     queue.push({root, 0});
@@ -603,9 +619,9 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
         uint32_t prim_idx = prim_idxs.size();
         uint8_t count = node->prim_idxs.size();
         for (uint32_t idx : node->prim_idxs) { prim_idxs.push_back(idx); }
-        nodes[idx] = {nullptr, prim_idx, count, true};
+        nodes[idx] = {UB<uint32_t>, prim_idx, count, true};
       } else 
-      { // interior node, compute child_bb, meta, recurse on children
+      { // interior node, pack child_bb, data, push children to stack
         uint32_t first_child_idx = next_free;
         uint8_t n_child = 0;
         aabb bbs[8];
@@ -619,9 +635,10 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
           }
         }
         next_free += n_child;
-        aabb *child_bbs = new aabb[n_child];
+        uint32_t bbs_idx = bbs.size();
+        bbs.emplace_back(bbs);
         for (int i=0;i<n_child;i++) child_bbs[i] = bbs[i];
-        nodes[idx] = {child_bbs, first_child_idx, n_child, false};
+        nodes[idx] = {bbs_idx, first_child_idx, n_child, false};
       }
     }
   }
@@ -630,6 +647,8 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
   /// @param N number of prims the current node needs to split
   void build(uint32_t N)
   {
+    n_nodes = 0;
+    n_interior_nodes = 0;
     if (N==0) return;
     aabb bb;
     bb.init();
@@ -641,15 +660,15 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
     }
     bvhbuildnode *temp_root = new bvhbuildnode(bb, temp_idxs);
     splitbuildnode(temp_root);
-    convertbuildnodes(temp_root, n_nodes);
+    convertbuildnodes(temp_root);
     delete temp_root;
   }
 
   uint32_t root() const { return 0; }
   bool leafNode(uint32_t node) const { return nodes[node].isLeaf(); }
   uint8_t count(uint32_t node) const { return nodes[node].count(); }
-  const aabb& childAABB(uint32_t node, uint8_t child) const 
-    { return nodes[node].child_bb[child]; }
+  const aabb_avx2& childAABB(uint32_t node) const 
+    { return bbs[nodes[node].childrenbb_idx]; }
   uint32_t childOf(uint32_t node, uint8_t child) const 
     { return nodes[node].idx()+child; }
   uint32_t primOf(uint32_t node, uint8_t i) const 
@@ -682,11 +701,9 @@ struct trimeshdata : item
     }
     return bb;
   };
-  std::function<ℝ3(triangle const&)> centroidoftri=[&](triangle const &tri)
-  {
-    ℝ3 centroid(0.f);
-    return (1.f/3.f)*(V[tri.V[0]]+V[tri.V[1]]+V[tri.V[2]]);
-  };
+  std::function<float(triangle const&, int i)> centroidoftri =
+    [&](triangle const &tri,int i)
+    { return (V[tri.V[0]][i]+V[tri.V[1]][i]+V[tri.V[2]][i])/3.f; };
   bvh<triangle, decltype(aabboftri), decltype(centroidoftri)> _bvh;
   void buildBVH() { _bvh.build(F.size()); }
   constexpr ℝ3 const& v(uint32_t face, int i) const {return V[F[face].V[i]];}
@@ -1089,13 +1106,15 @@ constexpr float aabb(cg::aabb const &bb, ray const &l_ray, float t_max)
   return tmin<BIAS ? tmax : tmin;
 }
 
+/// @todo simd aabb intersection
 /// @brief 8 aabb intersection using avx2 registers
 /// @param bb array of bounding boxes
 /// @param l_ray local ray to intersect with bbs
 /// @param t_max maximum distance along ray to consider for intersections
 TARGET_AVX2 inline void aabb_avx2(
-  cg::aabb const (&bb)[8], ray const &l_ray, float t_max)
+  cg::aabb_avx2 const &bbs, ray const &l_ray, float t_max)
 {
+  // load into vector registers
 
 }
 
@@ -1212,10 +1231,13 @@ constexpr bool trimesh(
       uint8_t n_children = BVH.count(node);
       for (uint8_t c=0; c<n_children; c++)
       { // get children t-values
-        float t_child = aabb(BVH.childAABB(node,c), l_ray, hinfo.z);
+        /// @todo switch to simd aabb intersection
+        float t_children[8];
+        aabb_avx2(BVH.childAABB(node), l_ray, hinfo.z);
         if (t_child == UB<float>) vals[c] = {UB<uint32_t>, 0.f};
         else { vals[c] = {BVH.childOf(node,c), t_child}; n_intersections++; }
       }
+      /// @todo remove sorting generic
       // sort vals array so that closest node is on top of the node stack
       std::sort(vals.begin(),vals.end(),
         [](auto a, auto b){return a.second > b.second;});
