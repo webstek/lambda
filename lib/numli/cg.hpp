@@ -38,6 +38,7 @@ namespace cg
 // ************************************
 /// @name constants
 constexpr uint32_t Nλ = 64;
+constexpr uint8_t HERO_SAMPLES = 8;
 
 // ************************************
 /// @name aliases
@@ -1849,9 +1850,13 @@ inline void loadTransform(transform &T, json const &j)
 inline void loadSpectrum(coefficientλ<Nλ> &s, json const &j)
 {
   if (j.is_string()) {s=sampledλ(j.get<std::string>());}
-  if (j.is_number()) {s=j.get<float>();}
-  ℝ3 rgb_color;
-  try {loadℝ3(rgb_color, j); s=linRGB2coefλ(rgb_color); } catch(...) { s=1.f; }
+  else if (j.is_number()) {s=j.get<float>();}
+  else 
+  {
+    ℝ3 rgb_color;
+    loadℝ3(rgb_color, j); 
+    s=linRGB2coefλ(rgb_color);
+  }
 }
 // ************************************
 

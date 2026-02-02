@@ -20,7 +20,7 @@
                   "scale": [2,2,2], 
                   "rotate": {"axis":[0,0,1], "degrees": 0}},
     "material": "refractive",
-    "source": "scenes/teapot_6.obj"},
+    "source": "scenes/teapot_16_full.obj"},
   {
     "name": "wall-bot",
     "type": "plane",

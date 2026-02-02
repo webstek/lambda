@@ -11,7 +11,7 @@
     "name": "sphere-light",
     "type": "sphere",
     "transform": {"translate": [0,-10,18], "scale":[0.6,0.6,0.6]},
-    "radiance": [600,500,300]}],
+    "radiance": [800,750,725]}],
 "objects": [
   {
     "name": "teapot",
@@ -20,7 +20,15 @@
                   "scale": [3,3,3], 
                   "rotate": {"axis":[0,0,1], "degrees": 20}},
     "material": "refractive",
-    "source": "scenes/teapot_10.obj"},
+    "source": "scenes/teapot_16_full.obj"},
+  {
+    "name": "prism",
+    "type": "trimesh",
+    "transform": {"translate": [-10,10,0], 
+                  "scale": [4,4,10], 
+                  "rotate": {"axis":[0,0,1], "degrees": -25}},
+    "material": "reflective",
+    "source": "scenes/prism.obj"},
   {
     "name": "wall-top",
     "type": "plane",
@@ -64,8 +72,8 @@
   "name": "refractive",
   "type": "blinn",
   "glossiness": 1024,
-  "Kt": 0.9,
-  "ior": "scenes/prismatic.csv"},
+  "Kt": 0.95,
+  "ior": "scenes/In2O3-SnO2.csv"},
   {
     "name": "smooth",
     "type": "blinn",
