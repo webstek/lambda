@@ -63,12 +63,13 @@ float Renderer::tracePath(
   
   ℝ3 const o = -r.u.normalized();
   ℝ3 const n = hinfo.n();
-  // return linRGB(hinfo.F.x);
 
   // check if path hit a light (emitter material)
   Material const &mat = scene.materials[hinfo.mat];
   if (std::holds_alternative<emitter>(mat)) 
     { return std::get<emitter>(mat).Radiance(λ,o,hinfo); }
+  if (std::holds_alternative<diremitter>(mat))
+    { return std::get<diremitter>(mat).Radiance(λ,o,hinfo); }
 
   // hit an object, scatter if less than max scattering
   if (scatters > MAX_SCATTERINGS) return 0.f;
