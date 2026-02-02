@@ -4,7 +4,7 @@
 
 CXX := g++
 CXXFLAGS := -std=c++23 -Wall -Wextra
-DEBUG_FLAGS := -g -DDEBUG -fopenmp
+DEBUG_FLAGS := -g -DDEBUG -fopenmp -mavx2
 RELEASE_FLAGS := -O3 -fopenmp -march=native
 SUPPRESS_FLAGS := -Wno-deprecated-literal-operator -Wno-maybe-uninitialized
 

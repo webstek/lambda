@@ -461,6 +461,7 @@ struct aabb_avx2
   alignas(32) float inf0[8], sup0[8];
   alignas(32) float inf1[8], sup1[8];
   alignas(32) float inf2[8], sup2[8];
+  aabb_avx2() = default;
   aabb_avx2(aabb (&bb)[8])
   {
     for (int i=0; i<8; i++) 
@@ -624,20 +625,20 @@ template <typename T, typename bbFunc, typename centerFunc> struct bvh
       { // interior node, pack child_bb, data, push children to stack
         uint32_t first_child_idx = next_free;
         uint8_t n_child = 0;
-        aabb bbs[8];
+        aabb child_bbs[8];
         for (int i=0; i<8; i++)
         { // check each potential child
+          child_bbs[i].init();
           if (node->children[i])
           { // if there is a child there
-            bbs[n_child] = node->children[i]->bb;
+            child_bbs[n_child] = node->children[i]->bb;
             queue.push({node->children[i], next_free+n_child});
             n_child++;
           }
         }
         next_free += n_child;
         uint32_t bbs_idx = bbs.size();
-        bbs.emplace_back(bbs);
-        for (int i=0;i<n_child;i++) child_bbs[i] = bbs[i];
+        bbs.emplace_back(child_bbs);
         nodes[idx] = {bbs_idx, first_child_idx, n_child, false};
       }
     }
@@ -1106,16 +1107,56 @@ constexpr float aabb(cg::aabb const &bb, ray const &l_ray, float t_max)
   return tmin<BIAS ? tmax : tmin;
 }
 
-/// @todo simd aabb intersection
 /// @brief 8 aabb intersection using avx2 registers
-/// @param bb array of bounding boxes
-/// @param l_ray local ray to intersect with bbs
+/// @param bbs 32 byte aligned 8-way aabb
+/// @param o broadcasted ℝ3 l_ray.o
+/// @param inv_u broadcasted ℝ3 l_ray.inv_u
 /// @param t_max maximum distance along ray to consider for intersections
+/// @param t return value array
+/// @warning aabb with no intersection are given t=0 NOT t=UB<float>
 TARGET_AVX2 inline void aabb_avx2(
-  cg::aabb_avx2 const &bbs, ray const &l_ray, float t_max)
+  const cg::aabb_avx2 &bbs, 
+  const __m256 (&p)[3],
+  const __m256 (&inv_u)[3], 
+  float t_max, 
+  float (&t)[8])
 {
-  // load into vector registers
+  // broadcast min and max t
+  __m256 tmin = _mm256_set1_ps(BIAS);
+  __m256 tmax = _mm256_set1_ps(t_max);
 
+  // load boxes
+  __m256 inf0 = _mm256_load_ps(bbs.inf0);
+  __m256 inf1 = _mm256_load_ps(bbs.inf1);
+  __m256 inf2 = _mm256_load_ps(bbs.inf2);
+  __m256 sup0 = _mm256_load_ps(bbs.sup0);
+  __m256 sup1 = _mm256_load_ps(bbs.sup1);
+  __m256 sup2 = _mm256_load_ps(bbs.sup2);
+
+  // compute distances to planes
+  __m256 t0x = _mm256_mul_ps(_mm256_sub_ps(inf0, p[0]), inv_u[0]);
+  __m256 t1x = _mm256_mul_ps(_mm256_sub_ps(sup0, p[0]), inv_u[0]);
+  __m256 t0y = _mm256_mul_ps(_mm256_sub_ps(inf1, p[1]), inv_u[1]);
+  __m256 t1y = _mm256_mul_ps(_mm256_sub_ps(sup1, p[1]), inv_u[1]);
+  __m256 t0z = _mm256_mul_ps(_mm256_sub_ps(inf2, p[2]), inv_u[2]);
+  __m256 t1z = _mm256_mul_ps(_mm256_sub_ps(sup2, p[2]), inv_u[2]);
+
+  // find near and far intersection for each axis
+  __m256 tnx = _mm256_min_ps(t0x, t1x);
+  __m256 tfx = _mm256_max_ps(t0x, t1x);
+  __m256 tny = _mm256_min_ps(t0y, t1y);
+  __m256 tfy = _mm256_max_ps(t0y, t1y);
+  __m256 tnz = _mm256_min_ps(t0z, t1z);
+  __m256 tfz = _mm256_max_ps(t0z, t1z);
+
+  // find in and out t vals
+  __m256 tin  = _mm256_max_ps(tnz, _mm256_max_ps(tnx, tny));
+  __m256 tout = _mm256_min_ps(tfz, _mm256_min_ps(tfx, tfy));
+  tin  = _mm256_max_ps(tin, tmin); 
+  tout = _mm256_min_ps(tout, tmax);
+
+  // zero out non-intersections, and store result
+  _mm256_store_ps(t, _mm256_and_ps(_mm256_cmp_ps(tin, tout, _CMP_LE_OQ), tin));
 }
 
 /// @brief Triangle-Ray intersection
@@ -1195,7 +1236,6 @@ inline bool trimeshdata_koi(
   return true;
 }
 
-
 /// @brief Mesh-Ray Intersection
 constexpr bool trimesh(
   cg::trimesh const tmesh, 
@@ -1205,12 +1245,20 @@ constexpr bool trimesh(
 {
   bool hit_any = false;
   auto const &mesh = std::get<cg::trimeshdata>(sc.meshes[tmesh.mesh]);
-  int n_faces = mesh.F.size();
   ray const l_ray = tmesh.T.toLocal(w_ray);
 
   /// bounding box check
   float t = aabb(mesh.bounds, l_ray, hinfo.z);
   if (t == UB<float>) return false;
+
+  // prep local ray for bb intersections
+  __m256 p[3];
+  __m256 inv_u[3];
+  for (int i=0; i<3; i++)
+  {
+    p[i] = _mm256_set1_ps(l_ray.p[i]);
+    inv_u[i] = _mm256_set1_ps(l_ray.inv_u[i]);
+  }
 
   // bvh traversal
   const auto &BVH = mesh._bvh;
@@ -1219,6 +1267,10 @@ constexpr bool trimesh(
   std::pair<uint32_t, float> stack[STACK_SIZE]; ///< stack of pairs (node,t)
   stack[sp++] = {BVH.root(), t};
 
+  // lambda for aabb sorting
+  static constexpr auto further = [](auto const& a, auto const& b)
+    { return a.second > b.second; };
+
   while (sp > 0)
   { // traverse bvh depth first
     const auto& [node, t] = stack[--sp];
@@ -1226,22 +1278,21 @@ constexpr bool trimesh(
 
     if (!BVH.leafNode(node))
     { // if node is internal, push intersected children onto stack
-      uint8_t n_intersections = 0;
-      std::array<std::pair<uint32_t,float>,8> vals;
-      uint8_t n_children = BVH.count(node);
-      for (uint8_t c=0; c<n_children; c++)
-      { // get children t-values
-        /// @todo switch to simd aabb intersection
-        float t_children[8];
-        aabb_avx2(BVH.childAABB(node), l_ray, hinfo.z);
-        if (t_child == UB<float>) vals[c] = {UB<uint32_t>, 0.f};
-        else { vals[c] = {BVH.childOf(node,c), t_child}; n_intersections++; }
+      // simd 8-wide box intersection
+      alignas(32) float t_children[8];
+      aabb_avx2(BVH.childAABB(node), p, inv_u, hinfo.z, t_children);
+      
+      // find and sort intersections, push onto stack so closest is on top
+      const uint8_t n = BVH.count(node);
+      std::pair<uint32_t,float> vals[n];
+      uint8_t hits = 0;
+      for (int i=0; i<n; i++) 
+      { 
+        if (t_children[i]!=0.f)
+          { vals[hits++] = {BVH.childOf(node,i), t_children[i]}; }
       }
-      /// @todo remove sorting generic
-      // sort vals array so that closest node is on top of the node stack
-      std::sort(vals.begin(),vals.end(),
-        [](auto a, auto b){return a.second > b.second;});
-      for (uint8_t i=0; i<n_intersections; i++) { stack[sp++] = vals[i]; }
+      std::sort(vals, vals+hits, further);
+      for (int i=0; i<hits; i++) { stack[sp++] = vals[i]; }
       continue;
     }
 
