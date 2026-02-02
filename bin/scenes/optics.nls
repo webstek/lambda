@@ -1,0 +1,57 @@
+{
+"camera": {
+  "pos": [0, -15, 5],
+  "look_at": [0, 0, 2],
+  "up": [0, 0, 1],
+  "fov": 60,
+  "ar": 1.778,
+  "width": 1280},
+"lights": [
+  {
+    "name": "dir-light",
+    "type": "quaddir",
+    "transform": {"translate": [0,10,3], 
+                  "scale": [1,4,1],
+                  "rotate": {"axis":[1,0,0], "degrees": -90}},
+    "specular": 1024,
+    "radiance": 6400.0},
+  {
+    "name": "ceil-light",
+    "type": "quaddir",
+    "transform": {"translate": [0,0,25],
+                 "scale": [5,5,1],
+                 "rotate": {"axis": [1,0,0], "degrees": 180}},
+    "specular": 20,
+    "radiance": 1}],
+"objects": [
+  {
+      "name": "prism",
+      "type": "trimesh",
+      "transform": {"translate": [-0.5,3.5,0], 
+                    "scale": [5,5,3], 
+                    "rotate": {"axis":[0,0,1], "degrees": 0}},
+      "material": "refractive",
+      "source": "scenes/prism.obj"},
+  {
+    "name": "wall-bot",
+    "type": "plane",
+    "transform": {"scale": [10, 10, 1]},
+    "material": "reflective"}],
+"materials": [
+  {
+    "name": "reflective",
+    "type": "blinn",
+    "Ks": 0.9,
+    "glossiness": 256},
+  {
+    "name": "refractive",
+    "type": "blinn",
+    "glossiness": 2048,
+    "Kt": 1.0,
+    "ior": "scenes/In2O3-SnO2.csv"},
+  {"name":"red","type":"lambertian","albedo":"scenes/dupont_red_orange_21.csv"},
+  {"name":"blue", "type":"lambertian","albedo": "scenes/dupont_blue_34.csv"},
+  {"name":"white", "type":"lambertian", "albedo": 0.9},
+  {"name":"gray",  "type":"lambertian", "albedo":"scenes/floor.csv"},
+  {"name":"grey","type": "lambertian","albedo": 0.2}]
+}

@@ -20,7 +20,7 @@
                   "scale": [3,3,3], 
                   "rotate": {"axis":[0,0,1], "degrees": 20}},
     "material": "refractive",
-    "source": "scenes/teapot_6.obj"},
+    "source": "scenes/teapot_10.obj"},
   {
     "name": "wall-top",
     "type": "plane",
@@ -58,19 +58,19 @@
   {
     "name": "reflective",
     "type": "blinn",
-    "Ks": [0.9, 0.9, 0.9],
+    "Ks": 0.9,
     "glossiness": 1024},
   {
   "name": "refractive",
   "type": "blinn",
   "glossiness": 1024,
-  "Kt": [0.9, 0.9, 0.9],
-  "ior": 1.52},
+  "Kt": 0.9,
+  "ior": "scenes/prismatic.csv"},
   {
     "name": "smooth",
     "type": "blinn",
-    "Kd": [0.7, 0.7, 0.7],
-    "Ks": [0.3, 0.3, 0.3],
+    "Kd": "scenes/dupont_red_orange_21.csv",
+    "Ks": 0.4,
     "glossiness": 64},
   {"name":"red",   "type":"lambertian", "albedo":[0.70,0.00,0.00]},
   {"name":"blue",  "type":"lambertian", "albedo":[0.00,0.15,0.70]},

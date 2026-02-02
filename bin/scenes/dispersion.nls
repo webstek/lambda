@@ -1,7 +1,7 @@
 {
 "camera": {
   "pos": [0, 15, 15],
-  "look_at": [0, 0, 0],
+  "look_at": [0, 0, 2],
   "up": [0, 0, 1],
   "fov": 60,
   "ar": 1.778,
@@ -14,7 +14,7 @@
     "radiance": 40.0}],
 "objects": [
   {
-    "name": "rect-prism",
+    "name": "teapot",
     "type": "trimesh",
     "transform": {"translate": [0,0,0], 
                   "scale": [2,2,2], 

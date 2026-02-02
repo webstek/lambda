@@ -67,9 +67,9 @@ float Renderer::tracePath(
   // check if path hit a light (emitter material)
   Material const &mat = scene.materials[hinfo.mat];
   if (std::holds_alternative<emitter>(mat)) 
-    { return std::get<emitter>(mat).Radiance(λ,o,hinfo); }
+    { return std::get<emitter>(mat).Radiance(λ); }
   if (std::holds_alternative<diremitter>(mat))
-    { return std::get<diremitter>(mat).Radiance(λ,o,hinfo); }
+    { return std::get<diremitter>(mat).Radiance(λ,o,hinfo.F.z); }
 
   // hit an object, scatter if less than max scattering
   if (scatters > MAX_SCATTERINGS) return 0.f;
@@ -131,7 +131,10 @@ float Renderer::tracePath(
   float const w_mat = si_i_mat.prob*si_i_mat.prob 
     / (si_i_mat.prob*si_i_mat.prob + p_L_mati*p_L_mati);
 
-  return M_IS*w_mat + L_IS*w_L;
+  float ret = M_IS*w_mat + L_IS*w_L;
+  // if (ret!=ret) 
+  //   { ret=ret+1e-3; }
+  return ret;
 }
 // ****************************************************************************
 
