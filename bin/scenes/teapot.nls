@@ -81,7 +81,7 @@
   {
   "name": "refractive",
   "type": "blinn",
-  "glossiness": 1024,
+  "glossiness": 256,
   "Kt": {"val": 0.95},
   "ior": {"val": "spectra/In2O3-SnO2.csv"}},
   {

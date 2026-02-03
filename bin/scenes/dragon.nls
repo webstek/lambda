@@ -1,0 +1,68 @@
+{
+"camera": {
+  "pos": [131.27,20.01,103.17],
+  "look_at": [92.507028, 14.976324, 94.680956],
+  "up": [0, 0, 1],
+  "fov": 40,
+  "dof": 0,
+  "f": 59,
+  "ar": 0.75,
+  "width": 540},
+"lights": [
+  {
+    "name": "sphere-light",
+    "type": "sphere",
+    "transform": {"translate": [76,10,200], "scale":[10,10,10]},
+    "radiance": {"val": "spectra/CIE_std_illum_D65.csv", "mult": 0.01}},
+  {
+    "name": "bottom",
+    "type": "sphere",
+    "transform": {"translate": [40,40,-10], "scale": [10,10,10]},
+    "radiance": {"val": 0.5}}],
+"objects": [
+  {
+    "name": "teapot-top",
+    "type": "trimesh",
+    "transform": {"translate": [14.197,9.075,92.861], 
+                  "scale": [3.573,3.573,3.573], 
+                  "rotate": {"axis":[0.048,0.865,0.5], "degrees": -73.2}},
+    "material": "rock",
+    "source": "models/teapot_20.obj"},
+  {
+    "name": "teapot-bottom",
+    "type": "trimesh",
+    "transform": {"translate": [20.792,17.679,78.465], 
+                  "scale": [3.573,3.573,3.573], 
+                  "rotate": {"axis":[-0.352,-0.227,-0.908], "degrees": -138.7}},
+    "material": "gray",
+    "source": "models/teapot_20.obj"},
+  {
+    "name": "dragon",
+    "type": "trimesh",
+    "transform": {"rotate": {"axis":[0,0,1], "degrees": 180}},
+    "material": "cyan",
+    "source": "models/xyzrgb_dragon.obj"}],
+"materials": [
+  {
+    "name": "reflective",
+    "type": "blinn",
+    "Ks": {"val": "spectra/polished_silver.csv"},
+    "glossiness": 1024},
+  {
+  "name": "refractive",
+  "type": "blinn",
+  "glossiness": 1024,
+  "Kt": {"val": 0.95},
+  "ior": {"val": "spectra/In2O3-SnO2.csv"}},
+  {
+    "name": "rock",
+    "type": "blinn",
+    "glossiness": 128,
+    "Kt": {"val": 0.8},
+    "ior": {"val": "spectra/flintglass.csv"}},
+  {"name":"red",   "type":"lambertian", "albedo":{"val": [0.70,0.00,0.00]}},
+  {"name":"blue",  "type":"lambertian", "albedo":{"val": [0.00,0.15,0.70]}},
+  {"name":"cyan",  "type":"lambertian", "albedo":{"val": [0.15,0.50,0.60]}},
+  {"name":"white", "type":"lambertian", "albedo":{"val": [1.00,1.00,1.00]}},
+  {"name":"gray",  "type":"lambertian", "albedo":{"val": [0.65,0.63,0.60]}}]
+}
