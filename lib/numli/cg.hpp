@@ -874,11 +874,12 @@ using Light =
 struct hitinfo;
 // ****************************************************************************
 /// @name materials
-enum class MaterialType {NONE, LAMBERTIAN, BLINN, MICROFACET};
+enum class MaterialType {NONE, LAMBERTIAN, BLINN, THINFILM, MICROFACET};
 constexpr MaterialType str2mat(std::string const &s)
 {
   if (s=="lambertian") return MaterialType::LAMBERTIAN;
   if (s=="blinn")      return MaterialType::BLINN;
+  if (s=="thinfilm")   return MaterialType::THINFILM;
   if (s=="microfacet") return MaterialType::MICROFACET;
   return MaterialType::NONE;
 }
@@ -950,6 +951,69 @@ struct blinn : item
   constexpr float blinnhProb(float cos_h) const 
     { return std::powf(std::abs(cos_h),α+1)*(α+1)*.5f*inv_π<float>; }
 };
+
+struct thinfilm : item
+{
+  coefficientλ<Nλ> film_ior, base_ior;
+  float d; // film thickness in nm
+  float α; // glossiness
+
+  constexpr heroλ cosl(const heroλ &n1, float cos_i) const 
+  { 
+    float vals[HERO_SAMPLES];
+    for (int k=0; k<HERO_SAMPLES; k++)
+    { // assumes n0 is 1.f (air)
+      float n01 = 1.f/n1[k];
+      vals[k] = std::sqrtf(1.f-n01*n01)*(1-cos_i*cos_i);
+    }
+    return heroλ(vals);
+  }
+  constexpr heroλ cosδ(
+    const heroλ &l, const heroλ &n1, const heroλ &cos_l) const
+  { 
+    float vals[HERO_SAMPLES];
+    for (int k=0; k<HERO_SAMPLES; k++)
+      { vals[k] = cosf(4*π<float>*n1[k]*d*cos_l[k]/l[k]); } 
+    return heroλ(vals);
+  }
+  constexpr heroλ R0(const heroλ &ni, const heroλ &nj) const
+    { return (ni-nj)*(ni-nj)/((ni+nj)*(ni+nj)); }
+  constexpr heroλ Rij(const heroλ &R0ij, float cos_i) const
+    { return R0ij+(1.f-R0ij)*std::powf(1.f-cos_i,5); }
+  constexpr heroλ Rtot(
+    const heroλ &R01, const heroλ &R12, const heroλ &cos_δ) const
+  { 
+    heroλ Ravg;
+    for (int k=0; k<HERO_SAMPLES; k++)
+      { Ravg[k] = 2*std::sqrtf(R01[k]*R12[k]); }
+    return (R01+R12+Ravg*cos_δ)/(1.f+R01*R12+Ravg*cos_δ);
+  }
+  constexpr heroλ BRDFcosθ(
+    const heroλ &l, ℝ3 const &i, ℝ3 const &o, ℝ3 const &n, bool front) const
+  { // consider only front side reflections
+    if (!front) return heroλ(0.f);
+
+    // o is on front side
+    float const cos_in = i|n;
+    if (cos_in < 0.f) return heroλ(0.f); // incoming light is on opposite hemi
+
+    // possible reflection, compute values
+    ℝ3 const h = (i+o).normalized();
+    float const cos_i = i|h;
+    auto const n1 = film_ior(l);
+    auto const n2 = base_ior(l);
+
+    auto const cos_l = cosl(n1, cos_i);
+    auto const cos_δ = cosδ(l, n1, cos_l);
+    auto const ones = heroλ(1.f);
+    auto const R0_01 = R0(ones,n1);
+    auto const R0_12 = R0(n1,n2);
+    auto const R01 = Rij(R0_01, cos_i);
+    auto const R12 = Rij(R0_12, cos_i);
+    return (α+2)*.125f*inv_π<float>*Rtot(R01,R12,cos_δ)*std::powf(h|n,α);
+  }
+};
+
 struct microfacet : item
 {
   coefficientλ<Nλ> albedo, ior;
@@ -981,7 +1045,7 @@ struct diremitter : item
 
 /// @brief Material interface
 using Material = 
-  std::variant<lambertian, blinn, microfacet, emitter, diremitter>;
+  std::variant<lambertian, blinn, thinfilm, microfacet, emitter, diremitter>;
 
 /// @brief Evaluation of BSDF times geometry term
 constexpr heroλ BxDFcosθ(
@@ -995,6 +1059,7 @@ constexpr heroλ BxDFcosθ(
   return std::visit(Overload{
     [&](lambertian const &mat){return mat.BRDFcosθ(l,i,n);},
     [&](blinn const &mat)     {return mat.BSDFcosθ(l,i,o,n,front);},
+    [&](thinfilm const &mat)  {return mat.BRDFcosθ(l,i,o,n,front);},
     [](auto const &){return heroλ(0.f);}},
     mat);
 }
@@ -1378,11 +1443,12 @@ constexpr bool trimesh(
   if (!hit_any) return false;
 
   // convert hinfo to world-space
-  hinfo.p   = tmesh.T.toWorld(pnt(hinfo.p));
-  hinfo.gn  = tmesh.T.toWorld(normal(hinfo.gn)).normalized();
-  hinfo.F.z = tmesh.T.toWorld(normal(hinfo.F.z)).normalized();
-  hinfo.F.x = tmesh.T.toWorld(normal(hinfo.F.x)).normalized();
-  hinfo.F.y = hinfo.F.z^hinfo.F.x;
+  hinfo.p = tmesh.T.toWorld(pnt(hinfo.p));
+  hinfo.gn= tmesh.T.toWorld(normal(hinfo.gn)).normalized();
+  hinfo.F =orthonormalBasisOf(tmesh.T.toWorld(normal(hinfo.F.z)).normalized());
+  // hinfo.F.x = tmesh.T.toWorld(normal(hinfo.F.x)).normalized();
+  // hinfo.F.y = hinfo.F.z^hinfo.F.x;
+  /// @todo fix tangent vector from mesh
   hinfo.mat = tmesh.mat;
   hinfo.obj = tmesh.obj;
   return hit_any;
@@ -1819,6 +1885,46 @@ inline float probForBlinn(
   }
 }
 
+/// @brief samples thin-film material for an incoming direction
+inline bool thinfilmi(
+  const heroλ &l, 
+  const cg::thinfilm &tf, 
+  const hitinfo &hinfo, 
+  const ℝ3 &o, 
+  info<ℝ3,heroλ> &info,
+  RNG &rng,
+  float p)
+{
+  float const lobe = rng.flt();
+  if (lobe>=p) { return false; }
+
+  // specular lobe sample
+  ℝ3 ω;
+  ω = blinnh(tf.α,rng.flt(),rng.flt());
+  if (!hinfo.front) { ω[2]*=-1; } // flip half vector to outgoing hemisphere
+  const ℝ3 h = hinfo.F.toBasis(ω);
+  const ℝ3 i = bra::reflect(o,h);
+  info.prob = p*std::powf(o|h,tf.α+1)*(tf.α+1)*.5f*inv_π<float>*.25f;
+  info.val  = i;
+  info.mult = tf.BRDFcosθ(l, i, o, hinfo.F.z, hinfo.front);
+  // info.weight = 
+  return true;
+}
+inline float probForThinFilm(
+  const cg::thinfilm &tf,
+  const hitinfo &hinfo,
+  const ℝ3 &o,
+  const ℝ3 &i,
+  float p)
+{
+  // check if i and o are on front hemisphere
+  const float cos_in = i|hinfo.F.z;
+  const float cos_on = o|hinfo.F.z;
+  if (cos_in<0.f || cos_on<0.f) return 0.f;
+  const ℝ3 h = (i+o).normalized();
+  return p*std::powf(o|h,tf.α+1)*(tf.α+1)*.5f*inv_π<float>*.25f;
+}
+
 
 /// @brief material incoming light direction sampling dispatch
 constexpr bool materiali(
@@ -1833,6 +1939,7 @@ constexpr bool materiali(
   return std::visit(Overload{
       [&](cg::lambertian const &lm){return lambertiani(l,lm,hinfo,info,rng,p);},
       [&](cg::blinn const &b){return blinni(l,b,hinfo,o,info,rng,p);},
+      [&](cg::thinfilm const &tf){return thinfilmi(l,tf,hinfo,o,info,rng,p);},
       [](auto const &){return false;}
     }, *mat);
 }
@@ -1849,6 +1956,7 @@ constexpr float probForMateriali(
   return std::visit(Overload{
       [&](cg::lambertian const &){return probForLambertian(hinfo,i,o,p);},
       [&](cg::blinn const &m){return probForBlinn(l,m,hinfo,i,o,p);},
+      [&](cg::thinfilm const &tf){return probForThinFilm(tf,hinfo,i,o,p);},
       [](auto const&){return 0.f;}
     }, *mat);
 }
@@ -2145,7 +2253,8 @@ inline void loadTriMeshFromFile(trimeshdata &m, std::string const& fpath)
     m.GT.emplace_back((B^m.GN[f]).normalized());
     for (unsigned i=0; i<3; i++)
     { // compute tangent per vertex
-      m.T[tri.N[i]] = B^m.N[tri.N[i]].normalized();
+      ℝ3 const tangent = (B^m.N[tri.N[i]]).normalized();
+      m.T[tri.N[i]] = tangent;
     }
     k += 3;
   }
@@ -2240,6 +2349,16 @@ inline void loadBlinn(blinn &m, json const &j)
   m.α = alpha;
   m.init();
 }
+inline void loadThinFilm(thinfilm &m, json const &j)
+{
+  float alpha, d;
+  loadSpectrum(m.film_ior,j.at("film_ior"));
+  try {loadSpectrum(m.base_ior,j.at("base_ior"));}catch(...){m.base_ior=1.54f;}
+  try {load(alpha,j.at("glossiness"));} catch(...) {alpha=1024;}
+  try {load(d,j.at("thickness"));} catch(...) {d=400;} // 200nm
+  m.α = alpha;
+  m.d = d;
+}
 /// @todo microfacet material loading
 inline void loadMicrofacet(microfacet &m, json const &j) {(void)m; (void)j;}
 
@@ -2249,6 +2368,7 @@ inline void loadMaterial(Material &mat, json const &j)
     Overload {
       [&](lambertian &m){ loadLambertian(m, j); },
       [&](blinn &m){ loadBlinn(m, j); },
+      [&](thinfilm &m){ loadThinFilm(m, j); },
       [&](microfacet &m){ loadMicrofacet(m, j); },
       [](auto &m){(void)m;}}, // no behaviour fallback
     mat);
@@ -2269,7 +2389,7 @@ inline void loadMaterials(list<Material> &mats, json const &j)
       lambertian m; 
       m.name=name; 
       loadLambertian(m,j_mat); 
-      mats.emplace_back(std::in_place_type<lambertian>, m); 
+      mats.emplace_back(std::in_place_type<lambertian>, std::move(m)); 
       break;
     }
     case MaterialType::BLINN:
@@ -2277,7 +2397,15 @@ inline void loadMaterials(list<Material> &mats, json const &j)
       blinn b; 
       b.name=name; 
       loadBlinn(b,j_mat); 
-      mats.emplace_back(std::in_place_type<blinn>, b); 
+      mats.emplace_back(std::in_place_type<blinn>, std::move(b));
+      break;
+    }
+    case MaterialType::THINFILM:
+    {
+      thinfilm tf;
+      tf.name=name;
+      loadThinFilm(tf,j_mat);
+      mats.emplace_back(std::in_place_type<thinfilm>, std::move(tf));
       break;
     }
     case MaterialType::MICROFACET:
