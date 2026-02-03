@@ -81,9 +81,9 @@
   {
   "name": "refractive",
   "type": "blinn",
-  "glossiness": 256,
+  "glossiness": 2048,
   "Kt": {"val": 0.95},
-  "ior": {"val": "spectra/In2O3-SnO2.csv"}},
+  "ior": {"val": "spectra/Ozaki.csv"}},
   {
     "name": "smooth",
     "type": "blinn",
