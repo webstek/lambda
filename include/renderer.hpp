@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file renderer.hpp
 /// @author Kyle Webster
-/// @version 0.1
-/// @date 30 Nov 2025
+/// @version 0.2
+/// @date 02 Feb 2026
 /// @brief Definition of renderer
 // ****************************************************************************
 #pragma once
@@ -24,8 +24,11 @@ public:
   nl::cg::scene scene;
 
   void render();
-  float tracePath(
-    float λ, nl::cg::ray const &ray, nl::RNG &rng, uint64_t scatters) const;
+  nl::cg::heroλ tracePath(
+    nl::cg::heroλ const &λ, 
+    nl::cg::ray const &ray, 
+    nl::RNG &rng, 
+    uint64_t scatters) const;
 
   void loadScene(std::string fpath);
   void saveImage() const;

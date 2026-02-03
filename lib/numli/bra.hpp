@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file bra.hpp
 /// @author Kyle Webster
-/// @version 0.7
-/// @date 6 Dec 2025
+/// @version 0.8
+/// @date 02 Feb 2026
 /// @brief Numerics Library - Algebra @ref bra
 /// @details
 /// Collection of algebraic structures and algorithms
@@ -188,7 +188,7 @@ template<uint32_t n, arithmetic T = std::float64_t> struct ℝn
     { for (uint32_t i=0;i<n;i++) elem[i]=x.elem[i]; }
   constexpr explicit ℝn( T x, T y ) requires (n==2) : elem{x,y} {}
   constexpr explicit ℝn( T x, T y, T z ) requires (n==3) : elem{x,y,z} {}
-  constexpr ℝn(std::initializer_list<T> init)
+  constexpr ℝn( std::initializer_list<T> init )
   {
     auto it=init.begin(); 
     for (uint32_t i=0; i<n && it!=init.end(); i++,it++) {elem[i]=*it;}
@@ -329,6 +329,24 @@ constexpr ℝn<n,T> operator*(ℝnxm<n,m,T> const &A, ℝn<m,T> const &b)
 
 /// @brief Vector-Scalar multiplication
 template<uint32_t n, arithmetic T>
+constexpr ℝn<n,T> operator+(T s, ℝn<n,T> const &a)
+{
+  T vals[n]; 
+  for (uint32_t i=0;i<n;i++) { vals[i]=a.elem[i]+s; }
+  return ℝn<n,T>(vals);
+}
+template<uint32_t n, arithmetic T>
+constexpr ℝn<n,T> operator+(ℝn<n,T> const &a, T s)
+{
+  T vals[n]; 
+  for (uint32_t i=0;i<n;i++) { vals[i]=a.elem[i]+s; }
+  return ℝn<n,T>(vals);
+}
+template<uint32_t n, arithmetic T>
+constexpr ℝn<n,T> operator-(ℝn<n,T> const &a, T s) { return a+(-s); }
+template<uint32_t n, arithmetic T>
+constexpr ℝn<n,T> operator-(T s, ℝn<n,T> const &a) { return s+(-a); }
+template<uint32_t n, arithmetic T>
 constexpr ℝn<n,T> operator*(T s, ℝn<n,T> const &a)
 {
   T vals[n]; 
@@ -340,6 +358,20 @@ constexpr ℝn<n,T> operator*(ℝn<n,T> const &a, T s)
 {
   T vals[n]; 
   for (uint32_t i=0;i<n;i++) { vals[i]=a.elem[i]*s; }
+  return ℝn<n,T>(vals);
+}
+template<uint32_t n, arithmetic T>
+constexpr ℝn<n,T> operator/(ℝn<n,T> const &a, T s)
+{
+  T vals[n]; 
+  for (uint32_t i=0;i<n;i++) { vals[i]=a.elem[i]/s; }
+  return ℝn<n,T>(vals);
+}
+template<uint32_t n, arithmetic T>
+constexpr ℝn<n,T> operator/(T s, ℝn<n,T> const &a)
+{
+  T vals[n]; 
+  for (uint32_t i=0;i<n;i++) { vals[i]=s/a.elem[i]; }
   return ℝn<n,T>(vals);
 }
 

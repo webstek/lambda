@@ -11,7 +11,7 @@
     "name": "sphere-light",
     "type": "sphere",
     "transform": {"translate": [-70,70,40], "scale": [50,50,50]},
-    "radiance": 40.0}],
+    "radiance": 25.0}],
 "objects": [
   {
     "name": "teapot",
@@ -20,11 +20,11 @@
                   "scale": [2,2,2], 
                   "rotate": {"axis":[0,0,1], "degrees": 0}},
     "material": "refractive",
-    "source": "scenes/teapot_16_full.obj"},
+    "source": "models/teapot_16_full.obj"},
   {
     "name": "wall-bot",
     "type": "plane",
-    "transform": {"scale": [32, 32, 1]},
+    "transform": {"scale": [64, 64, 1]},
     "material": "grey"}],
 "materials": [
   {
@@ -38,10 +38,10 @@
     "glossiness": 512,
     "Kd": 0.01,
     "Kt": 0.9,
-    "ior": "scenes/prismatic.csv"},
-  {"name":"red","type":"lambertian","albedo":"scenes/dupont_red_orange_21.csv"},
-  {"name":"blue", "type":"lambertian","albedo": "scenes/dupont_blue_34.csv"},
+    "ior": "spectra/In2O3-SnO2.csv"},
+  {"name":"red","type":"lambertian","albedo":"spectra/dupont_red_orange_21.csv"},
+  {"name":"blue", "type":"lambertian","albedo": "spectra/dupont_blue_34.csv"},
   {"name":"white", "type":"lambertian", "albedo": 1.00},
-  {"name":"gray",  "type":"lambertian", "albedo":"scenes/floor.csv"},
+  {"name":"gray",  "type":"lambertian", "albedo":"spectra/floor.csv"},
   {"name":"grey","type": "lambertian","albedo": 0.2}]
 }

@@ -20,7 +20,7 @@
                 "scale": [2.6,2.6,2.6], 
                 "rotate": {"axis":[0,0,1], "degrees": 180}},
   "material": "red",
-  "source": "scenes/teapot_6.obj"},
+  "source": "models/teapot_6.obj"},
   {
     "name": "prism",
     "type": "trimesh",
@@ -28,7 +28,7 @@
                   "scale": [10,10,10], 
                   "rotate": {"axis":[2,1,0], "degrees": 90}},
     "material": "refractive",
-    "source": "scenes/prism.obj"},
+    "source": "models/prism.obj"},
   {
     "name": "sphere1",
     "type": "sphere",
@@ -57,29 +57,29 @@
   {
     "name": "reflective",
     "type": "blinn",
-    "Ks": "scenes/polished_silver.csv",
+    "Ks": "spectra/polished_silver.csv",
     "glossiness": 1024},
   {
   "name": "refractive",
   "type": "blinn",
   "glossiness": 2048,
   "Kt": 0.9,
-  "ior": "scenes/prismatic.csv"},
+  "ior": "spectra/prismatic.csv"},
   {
   "name": "sapphire",
   "type": "blinn",
   "glossiness": 2048,
   "Kt": 0.95,
-  "ior": "scenes/Malitson-o.csv"},
+  "ior": "spectra/Malitson-o.csv"},
   {
     "name": "smooth",
     "type": "blinn",
     "Kd": 0.7,
     "Ks": 0.3,
     "glossiness": 256},
-  {"name":"red",   "type":"lambertian", "albedo":"scenes/dupont_red_orange_21.csv"},
-  {"name":"blue",  "type":"lambertian", "albedo":"scenes/dupont_blue_34.csv"},
+  {"name":"red",   "type":"lambertian", "albedo":"spectra/dupont_red_orange_21.csv"},
+  {"name":"blue",  "type":"lambertian", "albedo":"spectra/dupont_blue_34.csv"},
   {"name":"white", "type":"lambertian", "albedo": 1.0},
-  {"name":"gray",  "type":"lambertian", "albedo":"scenes/floor.csv"},
+  {"name":"gray",  "type":"lambertian", "albedo":"spectra/floor.csv"},
   {"name":"dark",  "type":"lambertian", "albedo": 0.3}]
 }

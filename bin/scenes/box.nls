@@ -11,7 +11,7 @@
     "name": "sphere-light",
     "type": "sphere",
     "transform": {"translate": [0,0,18]},
-    "radiance": [159,159,159]}],
+    "radiance": [259,259,259]}],
 "objects": [
   {
     "name": "sphere1",
@@ -84,11 +84,11 @@
     "type": "blinn",
     "glossiness": 1024,
     "Kt": [0.9, 0.9, 0.9],
-    "ior": 1.52},
+    "ior": "spectra/flintglass.csv"},
   {
     "name": "smooth",
     "type": "blinn",
-    "Kd": [0.7, 0.7, 0.7],
-    "Ks": [0.3, 0.3, 0.3],
+    "Kd": 0.7,
+    "Ks": 0.3,
     "glossiness": 64}]
 }

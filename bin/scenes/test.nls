@@ -72,10 +72,10 @@
     "type": "blinn",
     "glossiness": 2048,
     "Kt": 0.9,
-    "ior": "scenes/prismatic.csv"},
-  {"name":"red","type":"lambertian","albedo":"scenes/dupont_red_orange_21.csv"},
-  {"name":"blue", "type":"lambertian","albedo": "scenes/dupont_blue_34.csv"},
+    "ior": "spectra/prismatic.csv"},
+  {"name":"red","type":"lambertian","albedo":"spectra/dupont_red_orange_21.csv"},
+  {"name":"blue", "type":"lambertian","albedo": "spectra/dupont_blue_34.csv"},
   {"name":"white", "type":"lambertian", "albedo": 1.00},
-  {"name":"gray",  "type":"lambertian", "albedo":"scenes/floor.csv"},
+  {"name":"gray",  "type":"lambertian", "albedo":"spectra/floor.csv"},
   {"name": "grey","type": "lambertian","albedo": 0.7}]
 }

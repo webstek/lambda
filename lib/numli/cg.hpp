@@ -45,6 +45,7 @@ constexpr uint8_t HERO_SAMPLES = 8;
 using materialidx = uint32_t;
 using objectidx   = uint32_t;
 using meshidx     = uint32_t;
+using heroλ = bra::ℝn<HERO_SAMPLES,float>;
 
 // ****************************************************************************
 /// @name data structures
@@ -148,13 +149,13 @@ constexpr linRGB XYZ2linRGB( XYZ const &C )
 constexpr sRGB linRGB2sRGB(linRGB const &x)
 {
   auto f=[](float cl){ return cl>0.0031308f ? 
-    1.055f*std::pow(cl,1.f/2.4f)-0.055f : 12.92f*cl; };
+    1.055f*std::powf(cl,1.f/2.4f)-0.055f : 12.92f*cl; };
   return sRGB(f(x.c[0]), f(x.c[1]), f(x.c[2]));
 }
 constexpr linRGB sRGB2linRGB(sRGB const &x)
 {
   auto f=[](float c){ return c > 0.04045f ? 
-    std::pow( (c+0.055f)/1.055f, 2.4f ) : c / 12.92f;};
+    std::powf( (c+0.055f)/1.055f, 2.4f ) : c / 12.92f;};
   return linRGB(f(x.c[0]), f(x.c[1]), f(x.c[2]));
 }
 constexpr rgb24 sRGB2rgb24(sRGB const &x) 
@@ -255,6 +256,12 @@ template <uint32_t n> struct coefficientλ
     uint32_t i = static_cast<uint32_t>(x);
     float t=x-i;
     return (1.f-t)*v[i] + t*v[i+1];
+  }
+  constexpr heroλ operator()(const heroλ &λ) const
+  { // evaluates spectrum for each wavelength
+    float vals[HERO_SAMPLES];
+    for (int i=0; i<HERO_SAMPLES; i++) { vals[i] = (*this)(λ[i]); }
+    return heroλ(vals);
   }
   coefficientλ& operator=(coefficientλ&& o) noexcept 
     { for (uint32_t i=0;i<n;i++) {v[i]=std::move(o.v[i]);} return *this; }
@@ -464,12 +471,19 @@ constexpr transform operator<<(transform const &T1, transform const &T2)
 
 /// @brief transmission direction for relative ior (ηo/ηi), normal n
 /// @warning ASSUMES o and n are unit vectors in the same hemisphere
-constexpr ℝ3 transmit(ℝ3 const &o, ℝ3 const &n, float ior)
+constexpr void transmit(
+  ℝ3 const &o, 
+  ℝ3 const &n, 
+  const heroλ &ior, 
+  std::array<ℝ3,HERO_SAMPLES> &t_dirs)
 {
   float const cos_i = o|n;
-  float const cos_t2 = 1.f-ior*ior*(1.f-cos_i*cos_i);
-  if (cos_t2 < 0.f) { return ℝ3(0.f); } // TIR
-  return -ior*o-(std::sqrtf(cos_t2)-ior*cos_i)*n;
+  const heroλ cos_t2 = 1.f-ior*ior*(1.f-cos_i*cos_i);
+  for (int k=0; k<HERO_SAMPLES; k++)
+  {
+    if (cos_t2[k]<0.f) { t_dirs[k] = {0.f,0.f,0.f}; }
+    else { t_dirs[k] = -ior[k]*o-(std::sqrtf(cos_t2[k])-ior[k]*cos_i)*n; }
+  }
 }
 
 // ** end of spatial **********************************************************
@@ -872,7 +886,7 @@ constexpr MaterialType str2mat(std::string const &s)
 struct lambertian : item
 {
   coefficientλ<Nλ> albedo;
-  constexpr float BRDFcosθ(float l, ℝ3 const &i, ℝ3 const &n) const 
+  constexpr heroλ BRDFcosθ(const heroλ &l, ℝ3 const &i, ℝ3 const &n) const 
     { return albedo(l)*inv_π<float>*nl::max(0.f,i|n); }
 };
 struct blinn : item
@@ -886,10 +900,15 @@ struct blinn : item
     w_t    = Kt|Kt;
     p_spec = 1.f-p_d;
   }
+  /// @todo clean up with templates
   constexpr float F0(float n) const
     { return (n*n-2.f*n+1.f)/(n*n+2.f*n+1.f); }
-  constexpr float fresnel(float F0, float cos_i) const 
-    { return F0+(1.f-F0)*std::pow(1.f-cos_i,5); }
+  constexpr heroλ F0(const heroλ &n) const
+    { return (n*n-2.f*n+1.f)/(n*n+2.f*n+1.f); }
+  constexpr float fresnel(float F0, float cos_i) const
+    { return F0+(1.f-F0)*std::powf(1.f-cos_i,5); }
+  constexpr heroλ fresnel(const heroλ &F0, float cos_i) const 
+    { return F0+(1.f-F0)*std::powf(1.f-cos_i,5); }
   constexpr std::pair<float,float> fresnelSplit(float F) const
   {
     float p_r = w_r+F*w_t;
@@ -899,27 +918,29 @@ struct blinn : item
     p_t/=tot;
     return {p_r, p_t};
   }
-  constexpr float fdcosθ(float l, float cos_i) const 
+  constexpr heroλ fdcosθ(const heroλ &l, float cos_i) const 
     { return Kd(l)*inv_π<float>*nl::max(0.f,cos_i); }
-  constexpr float frcosθ(float l, float cos_h, float F) const
-    { return (Ks(l)+F*Kt(l))*(α+2)*.125f*inv_π<float>*std::pow(cos_h,α); }
-  constexpr float ftcosθ(float l, float cos_h_t, float F) const
-    { return Kt(l)*(1-F)*(α+2)*.125f*inv_π<float>*std::pow(cos_h_t,α); }
-  constexpr float BSDFcosθ(
-    float l, ℝ3 const &i, ℝ3 const &o, ℝ3 const &n, bool front) const 
+  constexpr heroλ frcosθ(const heroλ &l, float cos_h, const heroλ &F) const
+    { return (Ks(l)+F*Kt(l))*(α+2)*.125f*inv_π<float>*std::powf(cos_h,α); }
+  constexpr heroλ ftcosθ(
+    const heroλ &l, float cos_h_t, const heroλ &F) const
+    { return Kt(l)*(1.f-F)*(α+2)*.125f*inv_π<float>*std::powf(cos_h_t,α); }
+  constexpr heroλ BSDFcosθ(
+    const heroλ &l, ℝ3 const &i, ℝ3 const &o, ℝ3 const &n, bool front) const 
   { 
-    float const η = front ? 1.f/ior(l) : ior(l);
+    const heroλ η = front ? 1.f/ior(l) : ior(l);
     float const cos_i = i|n;
     float const cos_o = o|n;
-    float const F = fresnel(F0(η), cos_o);
+    const heroλ F = fresnel(F0(η), cos_o);
     if (cos_i>0.f)
     { 
       ℝ3 const h = (i+o).normalized();
-      return fdcosθ(l, cos_i) + frcosθ(l, h|n,F);
+      return fdcosθ(l,cos_i) + frcosθ(l,h|n,F);
     } else 
     { 
-      ℝ3 const ht = -(i+η*o).normalized();
-      return ftcosθ(l, std::abs(ht|n),F);
+      ℝ3 ht;
+      ht = -(i+η[0]*o).normalized();
+      return ftcosθ(l,std::abs(ht|n),F);
     }
   }
   /// @brief returns p(i|diffuse sampled)
@@ -927,7 +948,7 @@ struct blinn : item
     { return std::abs(cos_i)*inv_π<float>; }
   /// @brief returns p(h|conditions)
   constexpr float blinnhProb(float cos_h) const 
-    { return std::pow(std::abs(cos_h),α+1)*(α+1)*.5f*inv_π<float>; }
+    { return std::powf(std::abs(cos_h),α+1)*(α+1)*.5f*inv_π<float>; }
 };
 struct microfacet : item
 {
@@ -947,15 +968,15 @@ struct microfacet : item
 struct emitter : item
 {
   coefficientλ<Nλ> radiance;
-  constexpr float Radiance(float l) const
+  constexpr heroλ Radiance(const heroλ &l) const
     { return radiance(l); }
 };
 struct diremitter : item
 {
   coefficientλ<Nλ> radiance;
   float specular;
-  constexpr float Radiance(float l, ℝ3 const &o, ℝ3 const &n) const
-    { return radiance(l)*std::pow(max(o|n,0.f),specular); }
+  constexpr heroλ Radiance(const heroλ &l, ℝ3 const &o, ℝ3 const &n) const
+    { return radiance(l)*std::powf(max(o|n,0.f),specular); }
 };
 
 /// @brief Material interface
@@ -963,8 +984,8 @@ using Material =
   std::variant<lambertian, blinn, microfacet, emitter, diremitter>;
 
 /// @brief Evaluation of BSDF times geometry term
-constexpr float BxDFcosθ(
-  float l,
+constexpr heroλ BxDFcosθ(
+  const heroλ &l,
   Material const &mat, 
   ℝ3 const &i, 
   ℝ3 const &o, 
@@ -974,7 +995,7 @@ constexpr float BxDFcosθ(
   return std::visit(Overload{
     [&](lambertian const &mat){return mat.BRDFcosθ(l,i,n);},
     [&](blinn const &mat)     {return mat.BSDFcosθ(l,i,o,n,front);},
-    [](auto const &){return 0.f;}},
+    [](auto const &){return heroλ(0.f);}},
     mat);
 }
 
@@ -1419,7 +1440,23 @@ inline void spectrum(cg::coefficientλ<n> const &s, info<float> &info, RNG &rng)
 {
   float const Ω = s.sup-s.inf;
   info.val = s.inf+Ω*rng.flt();
-  info.prob = 1./Ω;
+  info.prob = 1.f/Ω;
+}
+/// @brief hero wavelength samples the spectrum s
+template <uint32_t n>
+inline void spectrum(
+  cg::coefficientλ<n> const &s, info<heroλ> &info, RNG &rng)
+{
+  float const Ω = s.sup-s.inf;
+  float hero = s.inf+Ω*rng.flt();
+  float step = Ω/float(HERO_SAMPLES);
+  for (int i=0; i<HERO_SAMPLES; i++) 
+  {
+    float λ = hero+i*step;
+    if (λ>s.sup) λ-=Ω;
+    info.val[i] = λ;
+  }
+  info.prob = 1.f/Ω;
 }
 
 /// @brief ray from camera c through SS (s[0],s[1]) from disk (s[2],s[3])
@@ -1427,7 +1464,7 @@ inline void camera(cg::camera const &c, ℝ2 const &uv, info<ray> &info,RNG &rng
 {
   const basis F = c.base;
   ℝ3 worldij = c.pos + F.x*(-c.w/2+c.Δ*uv[0])+F.y*(-c.h/2+c.Δ*uv[1])-c.D*F.z;
-  ℝ3 worldkl = c.pos + c.dof*(F.x*rng.flt() + F.y*rng.flt());
+  ℝ3 worldkl = c.pos + 2*c.dof*(F.x*(rng.flt()-.5f) + F.y*(rng.flt()-.5f));
   info.val = {worldkl, (worldij-worldkl).normalized()};
 }
 
@@ -1448,10 +1485,10 @@ inline void lights(
 
 /// @brief samples an ambient light at wavelength l
 inline void ambientlight(
-  float l,
+  const heroλ &l,
   cg::ambientlight const &al,
   hitinfo const &hinfo,
-  info<ℝ3,float> &info,
+  info<ℝ3,heroλ> &info,
   RNG &rng)
 {
   // get direction in hemisphere
@@ -1460,7 +1497,7 @@ inline void ambientlight(
   ℝ3 const i = hinfo.F.toBasis(dir);
   info.val = i;
   info.prob = .5f*inv_π<float>;
-  float const radiance = al.radiance(l);
+  const heroλ radiance = al.radiance(l);
   info.mult = radiance;
   info.weight = 2.f*π<float>*radiance;
 }
@@ -1468,11 +1505,11 @@ inline float probForAmbientLight() { return .5f*inv_π<float>; }
 
 /// @brief samples a point light at wavelength l
 inline void pointlight(
-  float l, 
+  const heroλ &l, 
   cg::pointlight const &pl, 
   hitinfo const &hinfo, 
   scene const &sc, 
-  info<ℝ3,float> &info)
+  info<ℝ3,heroλ> &info)
 {
   ℝ3 const L = pl.pos-hinfo.p;
   ℝ3 const i = L.normalized();
@@ -1492,11 +1529,11 @@ constexpr float probForPointLight() {return 0.f;}
 
 /// @brief samples the radiant intensity coming from a direction light
 inline void dirlight(
-  float l, 
+  const heroλ &l, 
   cg::dirlight const &dl,
   hitinfo const &hinfo,
   scene const &sc,
-  info<ℝ3,float> &info)
+  info<ℝ3,heroλ> &info)
 {
   ℝ3 const i = -dl.dir;
   info.val = i;
@@ -1513,11 +1550,11 @@ constexpr float probForDirLight() {return 0.f;}
 
 /// @brief uniformly samples a point of a quad dir light from a point
 inline void quaddirlight(
-  float l,
+  const heroλ &l,
   cg::quaddirlight const &qdl,
   hitinfo const &hinfo,
   scene const &sc,
-  info<ℝ3,float> &info,
+  info<ℝ3,heroλ> &info,
   RNG &rng)
 {
   // sample point on plane, then get ωi
@@ -1532,7 +1569,7 @@ inline void quaddirlight(
   // compute prob by converting from sr at hit to area at light
   float const dist2 = r|r;
   float const cos_spec = 
-    std::pow(-ωi|(bra::column<3>(qdl._plane.T.M,2).normalized()), qdl.spec);
+    std::powf(-ωi|(bra::column<3>(qdl._plane.T.M,2).normalized()), qdl.spec);
   info.prob = 
     max(1e-6f,(qdl.spec+1)*.5f*inv_π<float>*cos_spec*qdl.inv_area);
 
@@ -1553,17 +1590,17 @@ inline float probForQuadDirLight(cg::quaddirlight const &qdl, ray const &r)
 
   // direction could be generated, compute prob
   float const cosθ = -r.u.normalized()|hinfo.F.z;
-  return max(1e-6f, (qdl.spec+1)*.5f*inv_π<float>*std::pow(cosθ,qdl.spec)
+  return max(1e-6f, (qdl.spec+1)*.5f*inv_π<float>*std::powf(cosθ,qdl.spec)
     * qdl.inv_area);
 }
 
 /// @brief uniformly samples the solid angle of a sphere light from a point
 inline void spherelight(
-  float l,
+  const heroλ &l,
   cg::spherelight const &sl, 
   hitinfo const &hinfo, 
   scene const &sc,
-  info<ℝ3,float> &info, 
+  info<ℝ3,heroλ> &info, 
   RNG &rng) 
 {
   // compute probability for ωi
@@ -1605,11 +1642,11 @@ inline float probForSphereLight(cg::spherelight const &sl, ray const &r)
 
 /// @brief light sampling dispatch
 constexpr void light(
-  float l,
+  const heroλ &l,
   Light const *light, 
   hitinfo const &hinfo, 
   scene const &sc,
-  info<ℝ3,float> &info,
+  info<ℝ3,heroλ> &info,
   RNG &rng)
 {
   std::visit(Overload{
@@ -1633,7 +1670,7 @@ constexpr float probForLight(
       [&](cg::pointlight const &){return probForPointLight();},
       [&](cg::dirlight const &){return probForDirLight();},
       [&](cg::ambientlight const &){return probForAmbientLight();},
-      [](auto const &){return 0.f;}
+      [](auto const &){return heroλ(0.f);}
     }, *l);
 }
 // ** end of light sampling ***********
@@ -1644,10 +1681,10 @@ constexpr float probForLight(
 
 /// @brief cosine weighted sample of lambertian brdf
 inline bool lambertiani(
-  float l,
+  const heroλ &l,
   cg::lambertian const &mat,
   hitinfo const &hinfo,
-  info<ℝ3,float> &info,
+  info<ℝ3,heroλ> &info,
   RNG &rng,
   float p)
 {
@@ -1680,7 +1717,7 @@ inline float probForLambertian(
 /// @brief Blinn half-vector sample
 constexpr ℝ3 blinnh(float α, float x0, float x1)
 {
-  float const cosθ = std::pow(1.f-x0, 1.f/(α+1.f));
+  float const cosθ = std::powf(1.f-x0, 1.f/(α+1.f));
   float const sinθ = std::sqrtf(1.f-cosθ*cosθ);
   const float φ    = 2.f*π<float>*x1;
   return {sinθ*cosf(φ), sinθ*sinf(φ), cosθ};
@@ -1688,11 +1725,11 @@ constexpr ℝ3 blinnh(float α, float x0, float x1)
 
 /// @brief samples blinn material for an incoming direction
 inline bool blinni(
-  float l,
+  const heroλ &l,
   cg::blinn const &b, 
   hitinfo const &hinfo,
   ℝ3 const &o,
-  info<ℝ3,float> &info, 
+  info<ℝ3,heroλ> &info, 
   RNG &rng, 
   float p)
 {
@@ -1704,19 +1741,21 @@ inline bool blinni(
   if (lobe<pp_spec)
   { // specular sample
     // sample half vector, split on Fresnel
-    float const η = hinfo.front ? 1.f/b.ior(l) : b.ior(l);
-    ℝ3 ω, h, i_R, i_T;
+    const heroλ η = hinfo.front ? 1.f/b.ior(l) : b.ior(l);
+    ℝ3 ω, h, i_R;
     ω = blinnh(b.α,rng.flt(),rng.flt());
     if (!hinfo.front) { ω[2]*=-1; } // flip half vector to outgoing hemisphere
     h = hinfo.F.toBasis(ω);
     i_R = bra::reflect(o,h);
-    i_T = transmit(o,h,η); // returns {0,0,0} if TIR
+    std::array<ℝ3,HERO_SAMPLES> i_T;
+    transmit(o,h,η,i_T); // returns {0,0,0} if TIR
     
     /// @todo, compare with transmitted Fresnel split
     float const cos_o = o|h;
-    float F = b.fresnel(b.F0(η),cos_o);
-    if (i_T[0]==0.f) { F=1.f; } // TIR, all reflection
-    auto [p_r, p_t] = b.fresnelSplit(F);
+    heroλ F = b.fresnel(b.F0(η),cos_o);
+    for (int k=0; k<HERO_SAMPLES; k++)
+      { if (i_T[k][0]==0.f) F[k]=1.f; } // TIR, all reflection
+    auto [p_r, p_t] = b.fresnelSplit(F[0]);
 
     if (lobe<pp_spec*p_r)
     { // specular sample
@@ -1731,9 +1770,9 @@ inline bool blinni(
     } else
     { // transmissive sample
       info.prob = pp_spec*p_t*b.blinnhProb(ω[2])*.25f;
-      info.val  = i_T;
+      info.val  = i_T[0];
       info.mult = b.ftcosθ(l,ω[2],F);
-      info.weight = b.Kt(l)*(1-F)*(b.α+2)/(pp_spec*p_t*std::abs(ω[2]));
+      info.weight = b.Kt(l)*(1.f-F)*(b.α+2)/(pp_spec*p_t*std::abs(ω[2]));
       return true;
     }
   } else if (lobe<pp_spec+pp_d)
@@ -1783,11 +1822,11 @@ inline float probForBlinn(
 
 /// @brief material incoming light direction sampling dispatch
 constexpr bool materiali(
-  float l,
+  const heroλ &l,
   Material const *mat,
   hitinfo const &hinfo,
   ℝ3 const &o,
-  info<ℝ3,float> &info,
+  info<ℝ3,heroλ> &info,
   RNG &rng,
   float p)
 {
@@ -1849,14 +1888,18 @@ inline void loadTransform(transform &T, json const &j)
 }
 inline void loadSpectrum(coefficientλ<Nλ> &s, json const &j)
 {
-  if (j.is_string()) {s=sampledλ(j.get<std::string>());}
-  else if (j.is_number()) {s=j.get<float>();}
+  const json j_val = j.at("val");
+  if (j_val.is_string()) {s=sampledλ(j_val.get<std::string>());}
+  else if (j_val.is_number()) {s=j_val.get<float>();}
   else 
   {
     ℝ3 rgb_color;
-    loadℝ3(rgb_color, j); 
+    loadℝ3(rgb_color, j_val); 
     s=linRGB2coefλ(rgb_color);
   }
+  float mul=1.f;
+  try {load(mul, j.at("mult"));} catch(...) {}
+  s=s*mul;
 }
 // ************************************
 
