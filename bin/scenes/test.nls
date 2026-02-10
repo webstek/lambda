@@ -11,7 +11,7 @@
     "name": "sphere-light",
     "type": "sphere",
     "transform": {"translate": [3,0,19], "scale": [2,2,2]},
-    "radiance": 100.0}],
+    "radiance": {"val": 0.3125}}],
 "objects": [
   {
     "name": "sphere1",
@@ -65,17 +65,17 @@
   {
     "name": "reflective",
     "type": "blinn",
-    "Ks": 0.9,
+    "Ks": {"val": 0.9},
     "glossiness": 128},
   {
     "name": "refractive",
     "type": "blinn",
     "glossiness": 2048,
-    "Kt": 0.9,
-    "ior": "spectra/prismatic.csv"},
-  {"name":"red","type":"lambertian","albedo":"spectra/dupont_red_orange_21.csv"},
-  {"name":"blue", "type":"lambertian","albedo": "spectra/dupont_blue_34.csv"},
-  {"name":"white", "type":"lambertian", "albedo": 1.00},
-  {"name":"gray",  "type":"lambertian", "albedo":"spectra/floor.csv"},
-  {"name": "grey","type": "lambertian","albedo": 0.7}]
+    "Kt": {"val": 0.9},
+    "ior": {"val": "spectra/prismatic.csv"}},
+  {"name":"red","type":"lambertian","albedo":{"val":"spectra/dupont_red_orange_21.csv"}},
+  {"name":"blue", "type":"lambertian","albedo":{"val": "spectra/dupont_blue_34.csv"}},
+  {"name":"white", "type":"lambertian", "albedo":{"val": 1.00}},
+  {"name":"gray",  "type":"lambertian", "albedo":{"val":"spectra/floor.csv"}},
+  {"name": "grey","type": "lambertian","albedo":{"val": 0.7}}]
 }

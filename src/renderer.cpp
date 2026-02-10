@@ -104,6 +104,7 @@ heroλ Renderer::tracePath(
 
   // Light IS estimate
   const heroλ L_IS = si_i_L.mult * coef / (si_i_L.prob*si_l.prob);
+
   // ** end of L IS estimate ****************************
 
   // ** Material IS estimate ****************************
@@ -141,15 +142,7 @@ heroλ Renderer::tracePath(
   float const w_mat = si_i_mat.prob*si_i_mat.prob 
     / (si_i_mat.prob*si_i_mat.prob + p_L_mati*p_L_mati);
 
-  heroλ ret = M_IS*w_mat + L_IS*w_L;
-  for (int k=0; k<HERO_SAMPLES; k++) 
-  {
-    if (ret[k]!=ret[k])
-    {
-      ret[k]=nl::UB<float>;
-    }
-  }
-  return heroλ(ret);
+  return M_IS*w_mat + L_IS*w_L;
 }
 // ****************************************************************************
 

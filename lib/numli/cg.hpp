@@ -37,8 +37,8 @@ namespace cg
 
 // ************************************
 /// @name constants
-constexpr uint32_t Nλ = 64;
-constexpr uint8_t HERO_SAMPLES = 8;
+constexpr uint32_t Nλ = 128;
+constexpr uint8_t HERO_SAMPLES = 16;
 
 // ************************************
 /// @name aliases
@@ -207,6 +207,7 @@ struct sampledλ
 /// @brief Coeffiecient Spectrum - values spaced every Δ in nm
 template <uint32_t n> struct coefficientλ 
 {
+  static_assert(n>1);
   float const inf=400;
   float const sup=720;
   float const Δ=(sup-inf)/(n-1);
@@ -253,7 +254,7 @@ template <uint32_t n> struct coefficientλ
     if (l<=inf) return v[0];
     if (l>=sup) return v[n-1];
     float x = (l-inf)/Δ;
-    uint32_t i = static_cast<uint32_t>(x);
+    uint32_t i = min(static_cast<uint32_t>(x),n-2);
     float t=x-i;
     return (1.f-t)*v[i] + t*v[i+1];
   }
@@ -1673,8 +1674,9 @@ inline void spherelight(
   ℝ3 const L = sl._sphere.T.pos()-hinfo.p;
   float const dist2 = L|L;
   float const r2 = sl.size*sl.size;
-  float const sr = 1.f-std::sqrtf(1.f-r2/dist2);
+  float const sr = 1.f-std::sqrtf(max(0.f,1.f-r2/dist2));
   info.prob = 0.5f/(π<float>*sr);
+
 
   // sample direction in projection of sphere light onto sphere
   basis const base = orthonormalBasisOf(L);
@@ -1697,7 +1699,7 @@ inline float probForSphereLight(cg::spherelight const &sl, ray const &r)
   // check for intersection
   hitinfo hinfo;
   bool hit = intersect::sphere(sl._sphere, r, hinfo);
-  if (!hit) return 0.f;
+  if (!hit || !hinfo.front) return 0.f;
 
   // compute probability
   ℝ3 const L = sl._sphere.T.pos()-r.p;
@@ -1720,8 +1722,7 @@ constexpr void light(
     [&](cg::quaddirlight const &qdl){quaddirlight(l,qdl,hinfo,sc,info,rng);},
     [&](cg::pointlight const &pl){pointlight(l,pl,hinfo,sc,info);},
     [&](cg::dirlight const &dl){dirlight(l,dl,hinfo,sc,info);},
-    [&](cg::ambientlight const &al){ambientlight(l,al,hinfo,info,rng);},
-    [](auto const &){}
+    [&](cg::ambientlight const &al){ambientlight(l,al,hinfo,info,rng);}
   }, *light);
 }
 
