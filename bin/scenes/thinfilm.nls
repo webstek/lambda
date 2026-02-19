@@ -12,8 +12,8 @@
  {
     "name": "sphere-light",
     "type": "sphere",
-    "transform": {"translate": [0,13,18], "scale":[1,1,1]},
-    "radiance": {"val": "spectra/CIE_std_illum_D65.csv", "mult": 0.035}}],
+    "transform": {"translate": [0,-13,18], "scale":[1,1,1]},
+    "radiance": {"val": "spectra/CIE_std_illum_D65.csv", "mult": 0.025}}],
 "objects": [
   {
     "name": "teapot",
@@ -72,7 +72,7 @@
     "name": "thinfilm",
     "type": "thinfilm",
     "glossiness": 512,
-    "thickness": 200,
+    "thickness": 700,
     "film_ior": {"val": "spectra/acetone.csv"},
     "base_ior": {"val": 1.6}},
   {

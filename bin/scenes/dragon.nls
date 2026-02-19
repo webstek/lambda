@@ -31,7 +31,7 @@
     "transform": {"translate": [14.197,9.075,92.861], 
                   "scale": [3.573,3.573,3.573], 
                   "rotate": {"axis":[0.048,0.865,0.5], "degrees": -73.2}},
-    "material": "black-paint",
+    "material": "thinfilm",
     "source": "models/teapot_20.obj"},
   {
     "name": "teapot-bottom",
@@ -112,6 +112,13 @@
     "Kd": {"val": 0.02},
     "glossiness": 512,
     "Ks": {"val": 0.05}},
+  {
+    "name": "thinfilm",
+    "type": "thinfilm",
+    "glossiness": 512,
+    "thickness": 700,
+    "film_ior": {"val": "spectra/acetone.csv"},
+    "base_ior": {"val": 1.6}},
   {"name":"red",   "type":"lambertian", "albedo":{"val": "spectra/dupont_red_orange_21.csv"}},
   {"name":"jade",  "type":"lambertian", "albedo":{"val": [0.20,0.50,0.25]}},
   {"name":"cyan",  "type":"lambertian", "albedo":{"val": [0.15,0.50,0.60]}},

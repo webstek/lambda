@@ -1902,10 +1902,9 @@ inline bool thinfilmi(
   // specular lobe sample
   ℝ3 ω;
   ω = blinnh(tf.α,rng.flt(),rng.flt());
-  if (!hinfo.front) { ω[2]*=-1; } // flip half vector to outgoing hemisphere
   const ℝ3 h = hinfo.F.toBasis(ω);
   const ℝ3 i = bra::reflect(o,h);
-  info.prob = p*std::powf(o|h,tf.α+1)*(tf.α+1)*.5f*inv_π<float>*.25f;
+  info.prob = p*std::pow(hinfo.F.z|h,tf.α+1)*(tf.α+1)*.5f*inv_π<float>*.25f;
   info.val  = i;
   info.mult = tf.BRDFcosθ(l, i, o, hinfo.F.z, hinfo.front);
   // info.weight = 
