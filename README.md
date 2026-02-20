@@ -20,6 +20,7 @@ Navigate to `bin/`, call `./lambda <fpath> -s <SPP> -b <MAX_BOUNCES> -p <BOUNCE_
 
 
 ## Future Work
+* Tone mapping
 * Distributed rendering
 * Anisotropic Microfacet material
 * Absorption
