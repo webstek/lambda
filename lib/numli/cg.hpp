@@ -1331,14 +1331,13 @@ constexpr bool triangle(
   const ℝ3    m2 = v2^e2;
   const float s2 = (l_ray.u|m2) + (e2|mr);
   if (s2*D<0.f) { return false; }
-  const float t = ((v0-l_ray.p)|n)/D;
+  
+  const float inv_D = 1.f/D;
+  const float t = ((v0-l_ray.p)|n)*inv_D;
   if (t<BIAS || hinfo.z<t) { return false; } // behind ray or not closest hit
 
-  // barycentric coordinates
-  const float inv_tot = 1.f/(s0+s1+s2);
-  const ℝ3 b(s1*inv_tot, s2*inv_tot, s0*inv_tot);
-
   // populate hinfo
+  const ℝ3 b(s1*inv_D, s2*inv_D, s0*inv_D);
   hinfo.z = t;
   hinfo.p = l_ray(t);
   hinfo.gn = mesh.gn(face);
