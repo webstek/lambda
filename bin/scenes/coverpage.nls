@@ -1,0 +1,68 @@
+{
+"camera": {
+  "pos": [0, 25, 12],
+  "look_at": [0, 0, 3],
+  "up": [0, 0, 1],
+  "fov": 35,
+  "dof": 0.5,
+  "f": 25,
+  "ar": 2.5,
+  "width": 1280},
+"lights": [
+  {
+    "name": "center",
+    "type": "sphere",
+    "transform": {"translate": [0,10,80], "scale": [10,10,10]},
+    "radiance": {"val": "spectra/CIE_std_illum_D65.csv", "mult": 0.0125}}],
+"objects": [
+  {
+    "name": "clear-teapot",
+    "type": "trimesh",
+    "transform": {"translate": [-8,0,0.01], 
+                  "scale": [2,2,2], 
+                  "rotate": {"axis":[0,0,1], "degrees": -30}},
+    "material": "refractive",
+    "source": "models/teapot_20.obj"},
+  {
+    "name": "thinfilm-teapot",
+    "type": "trimesh",
+    "transform": {"translate": [6,0,0.01], 
+                  "scale": [2,2,2], 
+                  "rotate": {"axis":[0,0,1], "degrees": -30}},
+    "material": "thinfilm",
+    "source": "models/teapot_20.obj"},
+  {
+    "name": "wall-bot",
+    "type": "plane",
+    "transform": {"scale": [64, 18, 1], "translate": [0, -6, 0]},
+    "material": "reflective"},
+  {
+    "name": "wall-back",
+    "type": "plane",
+    "transform": {"scale": [64,32,1],
+                  "translate":[0,-24,32],
+                  "rotate":{"axis":[1,0,0],"degrees":90}},
+    "material": "gray"}],
+"materials": [
+  {
+    "name": "reflective",
+    "type": "blinn",
+    "Kd": {"val": "spectra/floor.csv", "mult": 0.05},
+    "Ks": {"val": 0.8},
+    "glossiness": 256},
+  {
+    "name": "refractive",
+    "type": "blinn",
+    "glossiness": 4096,
+    "Kd": {"val": 0.01},
+    "Kt": {"val": 0.95},
+    "ior": {"val": "spectra/In2O3-SnO2.csv"}},
+  {
+    "name": "thinfilm",
+    "type": "thinfilm",
+    "glossiness": 1024,
+    "thickness": 550,
+    "film_ior": {"val": "spectra/acetone.csv"},
+    "base_ior": {"val": 1.6}},
+  {"name":"gray", "type":"lambertian", "albedo":{"val": "spectra/floor.csv"}}]
+}

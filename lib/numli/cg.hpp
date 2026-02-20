@@ -1817,11 +1817,12 @@ inline bool blinni(
     std::array<ℝ3,HERO_SAMPLES> i_T;
     transmit(o,h,η,i_T); // returns {0,0,0} if TIR
     
-    /// @todo, compare with transmitted Fresnel split
     float const cos_o = o|h;
     heroλ F = b.fresnel(b.F0(η),cos_o);
     for (int k=0; k<HERO_SAMPLES; k++)
-      { if (i_T[k][0]==0.f) F[k]=1.f; } // TIR, all reflection
+    { // check for TIR
+      if (i_T[k][0]==0.f && i_T[k][1]==0.f && i_T[k][2]==0.f) F[k]=1.f; 
+    }
     auto [p_r, p_t] = b.fresnelSplit(F[0]);
 
     if (lobe<pp_spec*p_r)

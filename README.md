@@ -1,8 +1,14 @@
 # λ (Lambda)
-A C++ Spectral Path Tracer using my library numli
+A C++ Hero-wavelength Spectral Path Tracer using my library numli
 
-## Features
-* Spectral path tracing supporting Blinn and Lambertian material models.
+![](./bin/render/coverpage-1024spp-96b-0.90p-full.png)
+
+Sample rendering of two teapots on a glossy floor at 1024 samples per pixel illuminated by a D65 illuminant. Left: 550nm thick thin-film material. Right: Solid teapot with Indium-Tin Oxide index of refraction.
+
+## Highlight Features
+* Hero-wavelength Spectral MIS path tracing
+* Wide BVH with 8-way AVX2 box intersection
+* Blinn, Lambertian, and thin-film materials
 * Scene definition in `.nls` files
 
 ## Building
@@ -13,12 +19,11 @@ Navigate to `bin/`, call `./lambda <fpath> -s <SPP> -b <MAX_BOUNCES> -p <BOUNCE_
 
 
 ## Future Work
-* Anisotropic material
+* Anisotropic Microfacet material
 * Absorption
 * Textures
 * loading `gltf` scenes linked in `.nls` files
-* Verifying Depth of Field
 
 ## Dependencies
-This project uses `C++23` and `OpenMP` and has been tested to compile with 
+This project uses `C++23`, `OpenMP`, and `AVX2` instructions, and has been tested to compile with 
 `g++15`.
