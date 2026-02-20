@@ -1353,7 +1353,7 @@ inline bool trimeshdata_koi(
   ℝ3 const pv0 = l_ray.p-v0;
   ℝ3 const   n = v10 ^ v20;
   float const udotn = l_ray.u|n;
-  if (udotn<1e-10f) { return false; }
+  if (udotn==0.f) { return false; }
   float const det = -1.f/udotn;
 
   // compute t, u, v, check for early exits
