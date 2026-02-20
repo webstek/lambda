@@ -1,9 +1,9 @@
 # λ (Lambda)
 A C++ Hero-wavelength Spectral Path Tracer using my library numli
 
-![](./bin/render/coverpage-1024spp-96b-0.90p-full.png)
+![](./bin/render/coverpage-1024spp-96b-0.90p.png)
 
-Sample rendering of two teapots on a glossy floor at 1024 samples per pixel illuminated by a D65 illuminant. Left: 550nm thick thin-film material. Right: Solid teapot with Indium-Tin Oxide index of refraction.
+Sample rendering of two teapots on a glossy floor at 1024 samples per pixel illuminated by a D65 illuminant. Left: 550nm thick Acetate thin-film coating. Right: Solid teapot with Indium-Tin Oxide index of refraction.
 
 ## Highlight Features
 * Hero-wavelength Spectral MIS path tracing
@@ -19,8 +19,11 @@ Navigate to `bin/`, call `./lambda <fpath> -s <SPP> -b <MAX_BOUNCES> -p <BOUNCE_
 
 
 ## Future Work
+* Distributed rendering
 * Anisotropic Microfacet material
 * Absorption
+* Volumetric scattering
+* Lens-based Camera
 * Textures
 * loading `gltf` scenes linked in `.nls` files
 
