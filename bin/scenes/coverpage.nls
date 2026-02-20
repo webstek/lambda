@@ -6,8 +6,8 @@
   "fov": 35,
   "dof": 0.5,
   "f": 25,
-  "ar": 2.5,
-  "width": 1280},
+  "ar": 2.33,
+  "width": 3840},
 "lights": [
   {
     "name": "center",
@@ -22,7 +22,7 @@
                   "scale": [2,2,2], 
                   "rotate": {"axis":[0,0,1], "degrees": -30}},
     "material": "refractive",
-    "source": "models/teapot_20.obj"},
+    "source": "models/teapot_16_full.obj"},
   {
     "name": "thinfilm-teapot",
     "type": "trimesh",
