@@ -6,7 +6,7 @@ CXX := g++
 CXXFLAGS := -std=c++23 -Wall -Wextra
 DEBUG_FLAGS := -g -DDEBUG -fopenmp -mavx2
 RELEASE_FLAGS := -O3 -fopenmp -march=native
-SUPPRESS_FLAGS := -Wno-deprecated-literal-operator -Wno-maybe-uninitialized
+SUPPRESS_FLAGS := -Wno-deprecated-literal-operator
 
 SRC_DIR := src
 INCLUDE_DIR := include
@@ -23,8 +23,8 @@ OBJECTS := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(
            $(BUILD_DIR)/fast_obj.o
 
 # Include paths - find all subdirectories in include/ and lib/
-INCLUDES := -I$(INCLUDE_DIR) $(addprefix -I,$(shell find $(INCLUDE_DIR) -type d))
-INCLUDES += -I$(LIB_DIR) $(addprefix -I,$(shell find $(LIB_DIR) -type d))
+INCLUDES :=-I$(INCLUDE_DIR) $(addprefix -I,$(shell find $(INCLUDE_DIR) -mindepth 1 -type d))
+INCLUDES +=-I$(LIB_DIR) $(addprefix -I,$(shell find $(LIB_DIR) -mindepth 1 -type d))
 
 # Target executable
 TARGET := $(BIN_DIR)/lambda

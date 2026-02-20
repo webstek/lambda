@@ -1,13 +1,14 @@
 # λ (Lambda)
-A C++ Hero-wavelength Spectral Path Tracer using my library numli
+A C++ spectral renderer using my library numli
 
-![](./bin/render/coverpage-1024spp-96b-0.90p.png)
+![](./bin/render/coverpage-32768spp-64b-0.90p.png)
 
-Sample rendering of two teapots on a glossy floor at 1024 samples per pixel illuminated by a D65 illuminant. Left: 550nm thick Acetate thin-film coating. Right: Solid teapot with Indium-Tin Oxide index of refraction.
+Sample rendering of two teapots on a glossy floor at 32768 samples per pixel illuminated by a D65 illuminant. Left: 550nm thick Acetate thin-film coating. Right: Solid teapot with Indium-Tin Oxide index of refraction.
 
 ## Highlight Features
 * Hero-wavelength Spectral MIS path tracing
 * Wide BVH with 8-way AVX2 box intersection
+* Instanced triangle meshes and materials
 * Blinn, Lambertian, and thin-film materials
 * Scene definition in `.nls` files
 

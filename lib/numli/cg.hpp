@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file cg.hpp
 /// @author Kyle Webster
-/// @version 0.17
-/// @date 02 Feb 2026 
+/// @version 1.0
+/// @date 20 Feb 2026 
 /// @brief Numerics Library - Computer Graphics - @ref cg
 /// @details
 /// Collection of computer graphics structures and algorithms
@@ -344,10 +344,7 @@ struct ray
     p({p.elem[0],p.elem[1],p.elem[2]}), u({u.elem[0],u.elem[1],u.elem[2]}) 
   { 
     for (int i=0;i<3;i++) 
-    {
-      if (u[i]!=0.f) inv_u[i]=1.f/u[i];
-      else inv_u[i]=inft<float>; 
-    }
+      { if (u[i]!=0.f) inv_u[i]=1.f/u[i]; else inv_u[i]=inft<float>; }
   }
   constexpr ℝ3 operator()(float t) const { return p+t*u; }
   constexpr std::array<float,6> plucker() const
@@ -1309,82 +1306,45 @@ TARGET_AVX2 inline void aabb_avx2(
   _mm256_store_ps(t, _mm256_and_ps(_mm256_cmp_ps(tin, tout, _CMP_LE_OQ), tin));
 }
 
-/// @brief Triangle-Ray intersection
+/// @brief Triangle-Ray intersection using Plucker coordinates
 /// @warning hinfo.mat and hinfo.obj are NOT set
-/// @todo fix plucker coordinate intersection
 constexpr bool triangle(
   uint64_t face, cg::trimeshdata const &mesh, ray const &l_ray, hitinfo &hinfo)
 {
-  ℝ3 const &v0 = mesh.v(face,0);
-  ℝ3 const &v1 = mesh.v(face,1);
-  ℝ3 const &v2 = mesh.v(face,2);
-  ℝ3 const &e0 = v1-v0;
-  ℝ3 const &e1 = v2-v1;
-  ℝ3 const &e2 = v0-v2;
-  ℝ3 const &gn = mesh.gn(face);
-  ℝ3 const m(l_ray.p^l_ray.u);
-  float const D = l_ray.u|gn;
+  const ℝ3 &v0 = mesh.v(face,0);
+  const ℝ3 &v1 = mesh.v(face,1);
+  const ℝ3 &v2 = mesh.v(face,2);
+  const ℝ3 e0 = v1-v0;
+  const ℝ3 e2 = v0-v2;
+  const ℝ3  n = e2^e0;
+  const float D  = l_ray.u|n;
   if (D==0.f) [[unlikely]] { return false; }
-  if (std::abs(D)<.1f*BIAS) [[unlikely]] { return false; } // parallel
-  float const s0 = (l_ray.u|(v0^v1)) + (m|e0);
-  float const s1 = (l_ray.u|(v1^v2)) + (m|e1);
-  float const s2 = (l_ray.u|(v2^v0)) + (m|e2);
-  if (s0*D<-BIAS || s1*D<-BIAS || s2*D<-BIAS) [[likely]] 
-    { return false; } // not in triangle
-  float const t = ((v0-l_ray.p)|gn)/D;
-  if (t<0.f || hinfo.z<t) { return false; } // behind ray or not closest hit
+  
+  const ℝ3    mr = l_ray.p^l_ray.u;
+  const ℝ3    m0 = v0^e0;
+  const float s0 = (l_ray.u|m0) + (e0|mr);
+  if (s0*D<0.f) { return false; }
+  const ℝ3    e1 = v2-v1;
+  const ℝ3    m1 = v1^e1;
+  const float s1 = (l_ray.u|m1) + (e1|mr);
+  if (s1*D<0.f) { return false; }
+  const ℝ3    m2 = v2^e2;
+  const float s2 = (l_ray.u|m2) + (e2|mr);
+  if (s2*D<0.f) { return false; }
+  const float t = ((v0-l_ray.p)|n)/D;
+  if (t<BIAS || hinfo.z<t) { return false; } // behind ray or not closest hit
 
   // barycentric coordinates
-  float const tot = 1.f/D;
-  ℝ3 const b(s0*tot, s1*tot, s2*tot);
+  const float inv_tot = 1.f/(s0+s1+s2);
+  const ℝ3 b(s1*inv_tot, s2*inv_tot, s0*inv_tot);
 
   // populate hinfo
   hinfo.z = t;
   hinfo.p = l_ray(t);
-  hinfo.gn = gn;
+  hinfo.gn = mesh.gn(face);
   hinfo.F.z = mesh.n(face,b);
   hinfo.F.x = mesh.t(face,b);
-  hinfo.front = (gn|l_ray.u)<0.f;
-  return true;
-}
-
-// Woop et al. "Watertight Ray/Triangle Intersection" 
-// Journal of Computer Graphics Techniques. Vol. 2, No. 1, 2013
-inline bool triangle_koi( 
-  unsigned int faceID,
-  cg::trimeshdata const &mesh,
-  ray const &l_ray, 
-  hitinfo &hInfo)
-{
-  const auto face = mesh.F[faceID];
-  ℝ3 const &v0 = mesh.V[face.V[0]];
-  ℝ3 const &v1 = mesh.V[face.V[1]];
-  ℝ3 const &v2 = mesh.V[face.V[2]];
-  ℝ3 const &gn = mesh.gn(faceID);
-  ℝ3 const v10 = v1-v0;
-  ℝ3 const v20 = v2-v0;
-  ℝ3 const pv0 = l_ray.p-v0;
-  float const udotgn = l_ray.u|gn;
-  if (udotgn==0.f) [[unlikely]] { return false; }
-  float const det = -1.f/udotgn;
-
-  // compute t, u, v, check for early exits
-  float const t = det*pv0|gn;
-  if (t<BIAS || t>hInfo.z) [[likely]] { return false; }
-  float const b1 = det * l_ray.u | (v20 ^ pv0);
-  if (b1<0) [[unlikely]] { return false; }
-  float const b2 = det * l_ray.u | (pv0 ^ v10);
-  if (b2<0 || b1+b2>1) [[unlikely]] { return false; }
-  
-  // triangle is hit
-  float const b0 = 1-b1-b2;
-  ℝ3 const b = {b0, b1, b2}; 
-  hInfo.gn  = gn;
-  hInfo.F.z = mesh.n(faceID,b);
-  hInfo.F.x = mesh.t(faceID,b);
-  hInfo.front = (mesh.GN[faceID] | l_ray.u) < 0;
-  hInfo.p = l_ray.p + t*l_ray.u;
-  hInfo.z = t;
+  hinfo.front = (hinfo.gn|l_ray.u)<0.f;
   return true;
 }
 
@@ -1451,7 +1411,7 @@ constexpr bool trimesh(
     const uint8_t count = BVH.count(node);
     for (uint8_t i=0; i<count; i++)
     { // leaf node, test for triangle intersection
-      hit_any |= triangle_koi(BVH.primOf(node,i), mesh, l_ray, hinfo);
+      hit_any |= triangle(BVH.primOf(node,i), mesh, l_ray, hinfo);
     }
   }
   if (!hit_any) return false;
