@@ -336,10 +336,19 @@ struct ray
   ℝ3 inv_u;
   ray() {}
   ray(ℝ3 const &p, ℝ3 const &u) : p(p), u(u) 
-    { for (int i=0;i<3;i++) inv_u[i]=1.f/u[i]; }
+  { 
+    for (int i=0;i<3;i++) 
+      { if (u[i]!=0.f) inv_u[i]=1.f/u[i]; else inv_u[i]=inft<float>; }
+  }
   ray(ℝ4 const &p, ℝ4 const &u) : 
     p({p.elem[0],p.elem[1],p.elem[2]}), u({u.elem[0],u.elem[1],u.elem[2]}) 
-    { for (int i=0;i<3;i++) inv_u[i]=1.f/u[i]; }
+  { 
+    for (int i=0;i<3;i++) 
+    {
+      if (u[i]!=0.f) inv_u[i]=1.f/u[i];
+      else inv_u[i]=inft<float>; 
+    }
+  }
   constexpr ℝ3 operator()(float t) const { return p+t*u; }
   constexpr std::array<float,6> plucker() const
     { ℝ3 const m = p^u; return {u[0],u[1],u[2],m[0],m[1],m[2]}; }
@@ -916,6 +925,7 @@ struct blinn : item
     float p_r = w_r+F*w_t;
     float p_t = (1.f-F)*w_t;
     float const tot = p_r+p_t;
+    if (tot==0.f) throw;
     p_r/=tot;
     p_t/=tot;
     return {p_r, p_t};
@@ -1207,6 +1217,7 @@ constexpr bool sphere(cg::sphere const &s, ray const &w_ray, hitinfo &hinfo)
 constexpr bool plane(cg::plane const &p, ray const &w_ray, hitinfo &hinfo)
 {
   ray const l_ray = p.T.toLocal(w_ray);
+  if (l_ray.u[2]==0.f) [[unlikely]] { return false; }
   float const t = -l_ray.p[2] / l_ray.u[2];
   ℝ3 const x = l_ray(t);
   if (x[0]<-1.f || x[0]>1.f || x[1]<-1.f || x[1]>1.f || t<BIAS || t>hinfo.z) 
@@ -1301,7 +1312,7 @@ TARGET_AVX2 inline void aabb_avx2(
 /// @brief Triangle-Ray intersection
 /// @warning hinfo.mat and hinfo.obj are NOT set
 /// @todo fix plucker coordinate intersection
-constexpr bool trimeshdata(
+constexpr bool triangle(
   uint64_t face, cg::trimeshdata const &mesh, ray const &l_ray, hitinfo &hinfo)
 {
   ℝ3 const &v0 = mesh.v(face,0);
@@ -1313,6 +1324,7 @@ constexpr bool trimeshdata(
   ℝ3 const &gn = mesh.gn(face);
   ℝ3 const m(l_ray.p^l_ray.u);
   float const D = l_ray.u|gn;
+  if (D==0.f) [[unlikely]] { return false; }
   if (std::abs(D)<.1f*BIAS) [[unlikely]] { return false; } // parallel
   float const s0 = (l_ray.u|(v0^v1)) + (m|e0);
   float const s1 = (l_ray.u|(v1^v2)) + (m|e1);
@@ -1338,26 +1350,26 @@ constexpr bool trimeshdata(
 
 // Woop et al. "Watertight Ray/Triangle Intersection" 
 // Journal of Computer Graphics Techniques. Vol. 2, No. 1, 2013
-inline bool trimeshdata_koi( 
+inline bool triangle_koi( 
   unsigned int faceID,
   cg::trimeshdata const &mesh,
   ray const &l_ray, 
   hitinfo &hInfo)
 {
   const auto face = mesh.F[faceID];
-  ℝ3 const &v0  = mesh.V[face.V[0]];
-  ℝ3 const &v1  = mesh.V[face.V[1]];
-  ℝ3 const &v2  = mesh.V[face.V[2]];
+  ℝ3 const &v0 = mesh.V[face.V[0]];
+  ℝ3 const &v1 = mesh.V[face.V[1]];
+  ℝ3 const &v2 = mesh.V[face.V[2]];
+  ℝ3 const &gn = mesh.gn(faceID);
   ℝ3 const v10 = v1-v0;
   ℝ3 const v20 = v2-v0;
   ℝ3 const pv0 = l_ray.p-v0;
-  ℝ3 const   n = v10 ^ v20;
-  float const udotn = l_ray.u|n;
-  if (udotn==0.f) { return false; }
-  float const det = -1.f/udotn;
+  float const udotgn = l_ray.u|gn;
+  if (udotgn==0.f) [[unlikely]] { return false; }
+  float const det = -1.f/udotgn;
 
   // compute t, u, v, check for early exits
-  float const t = det*pv0|n;
+  float const t = det*pv0|gn;
   if (t<BIAS || t>hInfo.z) [[likely]] { return false; }
   float const b1 = det * l_ray.u | (v20 ^ pv0);
   if (b1<0) [[unlikely]] { return false; }
@@ -1367,7 +1379,7 @@ inline bool trimeshdata_koi(
   // triangle is hit
   float const b0 = 1-b1-b2;
   ℝ3 const b = {b0, b1, b2}; 
-  hInfo.gn = mesh.gn(faceID);
+  hInfo.gn  = gn;
   hInfo.F.z = mesh.n(faceID,b);
   hInfo.F.x = mesh.t(faceID,b);
   hInfo.front = (mesh.GN[faceID] | l_ray.u) < 0;
@@ -1439,7 +1451,7 @@ constexpr bool trimesh(
     const uint8_t count = BVH.count(node);
     for (uint8_t i=0; i<count; i++)
     { // leaf node, test for triangle intersection
-      hit_any |= trimeshdata_koi(BVH.primOf(node,i), mesh, l_ray, hinfo);
+      hit_any |= triangle_koi(BVH.primOf(node,i), mesh, l_ray, hinfo);
     }
   }
   if (!hit_any) return false;
@@ -1531,9 +1543,11 @@ inline void spectrum(
 inline void camera(cg::camera const &c, ℝ2 const &uv, info<ray> &info,RNG &rng)
 {
   const basis F = c.base;
-  ℝ3 worldij = c.pos + F.x*(-c.w/2+c.Δ*uv[0])+F.y*(-c.h/2+c.Δ*uv[1])-c.D*F.z;
+  ℝ3 worldij = 
+    c.pos+F.x*(-0.5f*c.w+c.Δ*uv[0])+F.y*(-0.5f*c.h+c.Δ*uv[1])-c.D*F.z;
   ℝ3 worldkl = c.pos + 2*c.dof*(F.x*(rng.flt()-.5f) + F.y*(rng.flt()-.5f));
   info.val = {worldkl, (worldij-worldkl).normalized()};
+  info.prob = 1.f;
 }
 
 // ************************************
@@ -1589,7 +1603,7 @@ inline void pointlight(
   hitinfo temp;
   temp.z = dist;
   float const shadowing = 
-    intersect::scene(sc,{hinfo.p+.05f*hinfo.n(),i},temp) ? 0.f : 1.f;
+    intersect::scene(sc,{hinfo.p,i},temp) ? 0.f : 1.f;
   info.mult = pl.radiant_intensity(l)*shadowing/(dist*dist);
   info.weight = info.mult;
 }
@@ -1610,7 +1624,7 @@ inline void dirlight(
   // check shadowing
   hitinfo temp;
   float const shadowing = 
-    intersect::scene(sc,{hinfo.p+.05f*hinfo.n(),i},temp) ? 0.f : 1.f;
+    intersect::scene(sc,{hinfo.p,i},temp) ? 0.f : 1.f;
   info.mult = dl.radiant_intensity(l)*shadowing;
   info.weight = info.mult;
 }
@@ -1645,7 +1659,7 @@ inline void quaddirlight(
   hitinfo temp;
   temp.z = std::sqrtf(dist2);
   float const shadowing = intersect::scene(
-    sc, {hinfo.p+.05f*hinfo.n(),ωi}, temp, qdl._plane.obj) ? 0.f : 1.f;
+    sc, {hinfo.p,ωi}, temp, qdl._plane.obj) ? 0.f : 1.f;
   info.mult = qdl.radiance(l)*cos_spec*shadowing;
 }
 /// @brief probability that a ray could be generated by sampling a qdl
@@ -1678,10 +1692,9 @@ inline void spherelight(
   float const sr = 1.f-std::sqrtf(max(0.f,1.f-r2/dist2));
   info.prob = 0.5f/(π<float>*sr);
 
-
   // sample direction in projection of sphere light onto sphere
   basis const base = orthonormalBasisOf(L);
-  float const cosθ = 1.f-rng.flt()*sr;
+  float const cosθ = max(0.f,1.f-rng.flt()*sr);
   float const sinθ = std::sqrtf(1.f-cosθ*cosθ);
   float const φ    = 2*π<float>*rng.flt();
   ℝ3 const ωi = base.x*sinθ*cosf(φ)+base.y*sinθ*sinf(φ)+base.z*cosθ;
@@ -1691,7 +1704,7 @@ inline void spherelight(
   hitinfo temp;
   temp.z = std::sqrtf(dist2);
   float const shadowing = intersect::scene(
-    sc, {hinfo.p+.05f*hinfo.n(),ωi}, temp, sl._sphere.obj) ? 0.f : 1.f;
+    sc, {hinfo.p,ωi}, temp, sl._sphere.obj) ? 0.f : 1.f;
   info.mult = sl.radiance(l)*shadowing;
 }
 /// @brief probability that a ray (direction from a hit point) could be sampled
@@ -1705,7 +1718,7 @@ inline float probForSphereLight(cg::spherelight const &sl, ray const &r)
   // compute probability
   ℝ3 const L = sl._sphere.T.pos()-r.p;
   float const dist2 = L|L;
-  float const sr = (1.f-std::sqrtf(1.f-sl.size*sl.size/dist2));
+  float const sr = (1.f-std::sqrtf(max(0.f,1.f-sl.size*sl.size/dist2)));
   return .5f/(π<float>*sr);
 }
 

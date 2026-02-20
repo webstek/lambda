@@ -55,6 +55,7 @@ namespace nl
   template<typename T> constexpr T e     = std::numbers::e_v<T>;
   template<typename T> constexpr T ε     = 
     std::numeric_limits<T>::epsilon();
+  template<typename T> constexpr T inft  = std::numeric_limits<T>::infinity();
   // **********************************
 
   
