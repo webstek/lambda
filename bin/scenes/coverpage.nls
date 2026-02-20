@@ -22,7 +22,7 @@
                   "scale": [2,2,2], 
                   "rotate": {"axis":[0,0,1], "degrees": -30}},
     "material": "refractive",
-    "source": "models/teapot_16_full.obj"},
+    "source": "models/teapot_20_full.obj"},
   {
     "name": "thinfilm-teapot",
     "type": "trimesh",
