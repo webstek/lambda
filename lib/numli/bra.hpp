@@ -207,7 +207,12 @@ template<uint32_t n, arithmetic T = std::float64_t> struct ℝn
   }
   constexpr T l2() const { return std::sqrt(len2()); }
   constexpr void normalize()
-    { T len=l2(); for (uint32_t i=0;i<n;i++) elem[i]/=len; }
+  { 
+    T len=l2();
+    assert(len!=T(0));
+    for (uint32_t i=0;i<n;i++) 
+    elem[i]/=len; 
+  }
   constexpr ℝn normalized() const {ℝn x(this);x.normalize();return ℝn(x.elem);}
   constexpr void negate() { for (uint32_t i=0;i<n;i++) elem[i]*=-1; }
   constexpr ℝn negated() const { ℝn x(this); x.negate(); return ℝn(x.elem); }

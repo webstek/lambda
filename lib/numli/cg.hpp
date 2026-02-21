@@ -296,39 +296,6 @@ constexpr coefficientλ<Nλ> linRGB2coefλ(linRGB c)
 // ****************************************************************************
 /// @name spatial
 
-struct vec 
-{
-  ℝ4 dir;
-  constexpr vec() {dir[3]=0.f;}
-  constexpr vec(float const (&x)[3]) 
-    { for (size_t i=0;i<3;i++) dir[i]=x[i]; dir[3]=0.f; }
-  constexpr vec(vec const &v) {for(size_t i=0;i<4;i++)dir[i]=v.dir[i];}
-  constexpr vec(ℝ3 const &x) {for(size_t i=0;i<3;i++)dir[i]=x[i];dir[3]=0.f;}
-  constexpr vec(ℝ4 const &x) {for(size_t i=0;i<3;i++)dir[i]=x[i];dir[3]=0.f;}
-};
-constexpr vec operator*(float s, vec const &v) { return vec(v.dir*s); }
-constexpr vec operator*(vec const &v, float s) { return s*v; }
-
-struct normal
-{
-  ℝ3 dir;
-  constexpr normal(float const (&x)[3]) {dir = x;}
-  constexpr normal(ℝ3 const &x) {dir = x;}
-};
-
-struct pnt
-{
-  ℝ4 pos;
-  constexpr pnt() {pos[3]=1.f;}
-  constexpr pnt(float const (&x)[3]) 
-    { for (size_t i=0;i<3;i++) pos[i]=x[i]; pos[3]=1.f; }
-  constexpr pnt(pnt const &v)  {for(size_t i=0;i<4;i++)pos[i]=v.pos[i];}
-  constexpr pnt(ℝ3 const &x)   {for(size_t i=0;i<3;i++)pos[i]=x[i];pos[3]=1.f;}
-  constexpr pnt(ℝ4 const &x)   {for(size_t i=0;i<3;i++)pos[i]=x[i];pos[3]=1.f;}
-};
-constexpr pnt operator+(pnt const &p, vec const &v) {return pnt(p.pos+v.dir);}
-constexpr pnt operator+(vec const &v, pnt const &p) {return p+v;}
-
 struct ray 
 {
   ℝ3 p;
@@ -418,10 +385,10 @@ struct transform
   constexpr ℝ3 pos() const {return bra::column<3>(M,3);}
   constexpr ray toLocal(ray const &_ray) const
     { return ray(M_inv*ℝ4(_ray.p,1.f), M_inv*ℝ4(_ray.u,0.f)); }
-  constexpr ℝ3 toWorld(pnt p) const { return ℝ3(M*p.pos); }
-  constexpr ℝ3 toWorld(vec v) const { return ℝ3(M*v.dir); }
-  constexpr ℝ3 toWorld(normal n) const 
-    { return ℝ3(bra::subMatT<3,3>(M_inv)*n.dir); }
+  constexpr ℝ3 pntToWorld(ℝ3 const &p) const { return ℝ3(M*ℝ4(p,1.f)); }
+  constexpr ℝ3 vecToWorld(ℝ3 const &v) const { return ℝ3(M*ℝ4(v,0.f)); }
+  constexpr ℝ3 normalToWorld(ℝ3 const &n) const 
+    { return ℝ3(bra::subMatT<3,3>(M_inv)*n); }
 
   // ** transform generation **********    
   static constexpr transform scale(ℝ3 const &x)
@@ -1184,7 +1151,7 @@ constexpr bool sphere(cg::sphere const &s, ray const &w_ray, hitinfo &hinfo)
 
   // ray hits
   ℝ3 const p = l_ray(t);
-  ℝ3 const n = s.T.toWorld(normal(p)).normalized();
+  ℝ3 const n = s.T.normalToWorld(p).normalized();
   bool const front = (n|w_ray.u) < 0.f;
 
   // (θ,φ) parameterization for tangent (and bitangent)
@@ -1198,7 +1165,7 @@ constexpr bool sphere(cg::sphere const &s, ray const &w_ray, hitinfo &hinfo)
 
   // populate hinfo in world space
   hinfo.z = t;
-  hinfo.p = s.T.toWorld(pnt(p));
+  hinfo.p = s.T.pntToWorld(p);
   hinfo.F.x = t_vec;
   hinfo.F.y = b_vec;
   hinfo.F.z = n;
@@ -1222,9 +1189,9 @@ constexpr bool plane(cg::plane const &p, ray const &w_ray, hitinfo &hinfo)
   
   // populate hinfo in world space
   hinfo.z = t;
-  hinfo.p = p.T.toWorld(pnt(x));
-  hinfo.F.z = p.T.toWorld(normal({0.f,0.f,1.f})).normalized();
-  hinfo.F.x = p.T.toWorld(normal({0.f,1.f,0.f})).normalized();
+  hinfo.p = p.T.pntToWorld(x);
+  hinfo.F.z = p.T.normalToWorld({0.f,0.f,1.f}).normalized();
+  hinfo.F.x = p.T.normalToWorld({0.f,1.f,0.f}).normalized();
   hinfo.F.y = hinfo.F.z^hinfo.F.x;
   hinfo.gn  = hinfo.F.z;
   hinfo.front = (w_ray.u|hinfo.F.z) < 0.f;
@@ -1318,7 +1285,7 @@ constexpr bool triangle(
   const ℝ3 e2 = v0-v2;
   const ℝ3  n = e2^e0;
   const float D  = l_ray.u|n;
-  if (D==0.f) [[unlikely]] { return false; }
+  if (abs(D)<ε<float>) [[unlikely]] { return false; }
   
   const ℝ3    mr = l_ray.p^l_ray.u;
   const ℝ3    m0 = v0^e0;
@@ -1337,7 +1304,7 @@ constexpr bool triangle(
   if (t<BIAS || hinfo.z<t) { return false; } // behind ray or not closest hit
 
   // populate hinfo
-  const ℝ3 b(s1*inv_D, s2*inv_D, s0*inv_D);
+  ℝ3 b(s1*inv_D, s2*inv_D, s0*inv_D);
   hinfo.z = t;
   hinfo.p = l_ray(t);
   hinfo.gn = mesh.gn(face);
@@ -1416,12 +1383,13 @@ constexpr bool trimesh(
   if (!hit_any) return false;
 
   // convert hinfo to world-space
-  hinfo.p = tmesh.T.toWorld(pnt(hinfo.p));
-  hinfo.gn= tmesh.T.toWorld(normal(hinfo.gn)).normalized();
-  hinfo.F =orthonormalBasisOf(tmesh.T.toWorld(normal(hinfo.F.z)).normalized());
-  // hinfo.F.x = tmesh.T.toWorld(normal(hinfo.F.x)).normalized();
-  // hinfo.F.y = hinfo.F.z^hinfo.F.x;
+  hinfo.p = tmesh.T.pntToWorld(hinfo.p);
+  hinfo.gn= tmesh.T.normalToWorld(hinfo.gn).normalized();
+  hinfo.F = orthonormalBasisOf(tmesh.T.normalToWorld(hinfo.F.z));
   /// @todo fix tangent vector from mesh
+  // hinfo.F.z = tmesh.T.normalToWorld(hinfo.F.z).normalized();
+  // hinfo.F.x = tmesh.T.normalToWorld(hinfo.F.x).normalized();
+  // hinfo.F.y = hinfo.F.z^hinfo.F.x;
   hinfo.mat = tmesh.mat;
   hinfo.obj = tmesh.obj;
   return hit_any;
