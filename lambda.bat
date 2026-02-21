@@ -6,7 +6,7 @@
 #SBATCH --qos=granite-guest
 #SBATCH --account=cs6969
 #SBATCH --cpus-per-task=96
-#SBATCH -t 0:20:00
+#SBATCH -t 3:30:00
 #SBATCH --export=SPP,SCATTERS,SAMPLEPROB
 
 # Usage: sbatch --export=SPP=1024,SCATTERS=64,SAMPLEPROB=0.9 lambda.bat
@@ -20,9 +20,10 @@ echo "*** Assigned Granite Node: " $SLURMD_NODENAME \
 module load gcc/15.1.0
 
 echo "*** Compiling..." >> $LOGFILE
+make clean
 make release
 
 cd bin
 echo "*** Rendering..." >> $LOGFILE
-(time ./lambda scenes/dispersion.nls -s $SPP -b $SCATTERS -p $SAMPLEPROB) \
+(time ./lambda scenes/coverpage.nls -s $SPP -b $SCATTERS -p $SAMPLEPROB) \
   &>> $LOGFILE
