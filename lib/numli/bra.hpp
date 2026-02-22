@@ -227,6 +227,9 @@ template<uint32_t n, arithmetic T = std::float64_t> struct ℝn
     { copy(elem, a); return *this; }
   constexpr ℝn& operator=(T v) noexcept
     { for (uint32_t i=0;i<n;i++) elem[i]=v; return *this; }
+  
+  constexpr ℝn& operator/=(T v)
+    { for (uint32_t i=0;i<n;i++) elem[i]/=v; return *this; }
 };
 // ** end ℝn **************************
 

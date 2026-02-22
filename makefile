@@ -7,6 +7,7 @@ CXXFLAGS := -std=c++23 -Wall -Wextra
 DEBUG_FLAGS := -g -DDEBUG -fopenmp -mavx2
 RELEASE_FLAGS := -O3 -fopenmp -march=native
 SUPPRESS_FLAGS := -Wno-deprecated-literal-operator
+TRAP_FLAGS := -fsanitize=undefined -fno-sanitize-recover=undefined -fsignaling-nans -ftrapping-math
 
 SRC_DIR := src
 INCLUDE_DIR := include
@@ -34,7 +35,7 @@ TARGET := $(BIN_DIR)/lambda
 
 all: debug
 
-debug: CXXFLAGS += $(DEBUG_FLAGS) $(SUPPRESS_FLAGS)
+debug: CXXFLAGS += $(DEBUG_FLAGS) $(SUPPRESS_FLAGS) $(TRAP_FLAGS)
 debug: $(TARGET)
 
 release: CXXFLAGS += $(RELEASE_FLAGS) $(SUPPRESS_FLAGS)

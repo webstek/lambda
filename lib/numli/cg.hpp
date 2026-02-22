@@ -889,7 +889,6 @@ struct blinn : item
     float p_r = w_r+F*w_t;
     float p_t = (1.f-F)*w_t;
     float const tot = p_r+p_t;
-    if (tot==0.f) throw;
     p_r/=tot;
     p_t/=tot;
     return {p_r, p_t};
@@ -908,14 +907,16 @@ struct blinn : item
     float const cos_i = i|n;
     float const cos_o = o|n;
     const heroλ F = fresnel(F0(η), cos_o);
-    if (cos_i>0.f)
-    { 
-      ℝ3 const h = (i+o).normalized();
+    if (cos_i*cos_o>0.f)
+    { // i and o are in same hemisphere
+      ℝ3 h = i+o;
+      const float len2_h = h.len2();
+      if (len2_h < ε<float>) h = (n-(n|o)*o).normalized();
+      else h/=sqrtf(len2_h);
       return fdcosθ(l,cos_i) + frcosθ(l,h|n,F);
     } else 
     { 
-      ℝ3 ht;
-      ht = -(i+η[0]*o).normalized();
+      const ℝ3 ht = -(i+η[0]*o).normalized();
       return ftcosθ(l,std::abs(ht|n),F);
     }
   }
@@ -939,7 +940,7 @@ struct thinfilm : item
     for (int k=0; k<HERO_SAMPLES; k++)
     { // assumes n0 is 1.f (air)
       float n01 = 1.f/n1[k];
-      vals[k] = std::sqrtf(1.f-n01*n01)*(1-cos_i*cos_i);
+      vals[k] = std::sqrtf(1.f-n01*n01)*(1.f-cos_i*cos_i);
     }
     return heroλ(vals);
   }
@@ -965,15 +966,12 @@ struct thinfilm : item
   }
   constexpr heroλ BRDFcosθ(
     const heroλ &l, ℝ3 const &i, ℝ3 const &o, ℝ3 const &n, bool front) const
-  { // consider only front side reflections
-    if (!front) return heroλ(0.f);
-
-    // o is on front side
-    float const cos_in = i|n;
-    if (cos_in < 0.f) return heroλ(0.f); // incoming light is on opposite hemi
-
-    // possible reflection, compute values
-    ℝ3 const h = (i+o).normalized();
+  { // return non-zero only for front i and o in same hemisphere as n
+    if (!front || (i|n)<0.f || (o|n)<0.f) { return heroλ(0.f); }
+    ℝ3 h = i+o;
+    const float len2_h = h.len2();
+    if (len2_h < ε<float>) h = (n-(n|o)*o).normalized();
+    else h/=sqrtf(len2_h);
     float const cos_i = i|h;
     auto const n1 = film_ior(l);
     auto const n2 = base_ior(l);
@@ -1240,12 +1238,12 @@ TARGET_AVX2 inline void aabb_avx2(
   __m256 tmax = _mm256_set1_ps(t_max);
 
   // load boxes
-  __m256 inf0 = _mm256_load_ps(bbs.inf0);
-  __m256 inf1 = _mm256_load_ps(bbs.inf1);
-  __m256 inf2 = _mm256_load_ps(bbs.inf2);
-  __m256 sup0 = _mm256_load_ps(bbs.sup0);
-  __m256 sup1 = _mm256_load_ps(bbs.sup1);
-  __m256 sup2 = _mm256_load_ps(bbs.sup2);
+  __m256 inf0 = _mm256_loadu_ps(bbs.inf0);
+  __m256 inf1 = _mm256_loadu_ps(bbs.inf1);
+  __m256 inf2 = _mm256_loadu_ps(bbs.inf2);
+  __m256 sup0 = _mm256_loadu_ps(bbs.sup0);
+  __m256 sup1 = _mm256_loadu_ps(bbs.sup1);
+  __m256 sup2 = _mm256_loadu_ps(bbs.sup2);
 
   // compute distances to planes
   __m256 t0x = _mm256_mul_ps(_mm256_sub_ps(inf0, p[0]), inv_u[0]);
@@ -1270,7 +1268,7 @@ TARGET_AVX2 inline void aabb_avx2(
   tout = _mm256_min_ps(tout, tmax);
 
   // zero out non-intersections, and store result
-  _mm256_store_ps(t, _mm256_and_ps(_mm256_cmp_ps(tin, tout, _CMP_LE_OQ), tin));
+  _mm256_storeu_ps(t, _mm256_and_ps(_mm256_cmp_ps(tin, tout, _CMP_LE_OQ), tin));
 }
 
 /// @brief Triangle-Ray intersection using Plucker coordinates
@@ -1298,13 +1296,14 @@ constexpr bool triangle(
   const ℝ3    m2 = v2^e2;
   const float s2 = (l_ray.u|m2) + (e2|mr);
   if (s2*D<0.f) { return false; }
+  if (std::abs(s0+s1+s2)<ε<float>) [[unlikely]] { return false; }
   
   const float inv_D = 1.f/D;
   const float t = ((v0-l_ray.p)|n)*inv_D;
   if (t<BIAS || hinfo.z<t) { return false; } // behind ray or not closest hit
 
   // populate hinfo
-  ℝ3 b(s1*inv_D, s2*inv_D, s0*inv_D);
+  const ℝ3 b(s1*inv_D, s2*inv_D, s0*inv_D);
   hinfo.z = t;
   hinfo.p = l_ray(t);
   hinfo.gn = mesh.gn(face);
@@ -1809,14 +1808,23 @@ inline float probForBlinn(
   ℝ3 const n = hinfo.n();
   float const ior = hinfo.front ? 1.f/b.ior(l) : b.ior(l);
   float const cos_in = i|n;
+  float const cos_on = o|n;
   ℝ3 h;
-  if (cos_in>0.f) { h = (i+o).normalized(); }
-  else { h = -(i+ior*o).normalized(); } // always points to lower ior mat
+  if (cos_in*cos_on>0.f) 
+  { // reflection
+    h = i+o;
+    const float len2_h = h.len2();
+    if (len2_h < ε<float>) h = (n-(n|o)*o).normalized();
+    else h/=sqrtf(len2_h);
+  } else 
+  { // transmission, points towards lower ior
+    h = -(i+ior*o).normalized(); 
+  }
   float const cos_o = std::abs(o|h);
   float const F = b.fresnel(b.F0(ior), cos_o);
   auto [p_r, p_t] = b.fresnelSplit(F);
-  if (cos_in>0.f)
-  { // reflection/diffuse
+  if (cos_in*cos_on>0.f)
+  { // reflection
     // p(i) = p*(p(d)p(i|d)+p(spec)*p(r|spec)*p(i|r))
     return p*(b.p_d*b.fdiProb(cos_in) + b.p_spec*p_r*b.blinnhProb(h|n)*.25f);
   } else
@@ -1838,6 +1846,10 @@ inline bool thinfilmi(
   RNG &rng,
   float p)
 {
+  // don't sample back hits or hits from below shading normal
+  const ℝ3 &n = hinfo.F.z;
+  if (!hinfo.front || (o|n)<0.f) { return false; }
+
   float const lobe = rng.flt();
   if (lobe>=p) { return false; }
 
@@ -1846,9 +1858,9 @@ inline bool thinfilmi(
   ω = blinnh(tf.α,rng.flt(),rng.flt());
   const ℝ3 h = hinfo.F.toBasis(ω);
   const ℝ3 i = bra::reflect(o,h);
-  info.prob = p*std::pow(hinfo.F.z|h,tf.α+1)*(tf.α+1)*.5f*inv_π<float>*.25f;
+  info.prob = p*std::pow(n|h,tf.α+1)*(tf.α+1)*.5f*inv_π<float>*.25f;
   info.val  = i;
-  info.mult = tf.BRDFcosθ(l, i, o, hinfo.F.z, hinfo.front);
+  info.mult = tf.BRDFcosθ(l, i, o, n, hinfo.front);
   // info.weight = 
   return true;
 }
@@ -1859,11 +1871,15 @@ inline float probForThinFilm(
   const ℝ3 &i,
   float p)
 {
-  // check if i and o are on front hemisphere
-  const float cos_in = i|hinfo.F.z;
-  const float cos_on = o|hinfo.F.z;
-  if (cos_in<0.f || cos_on<0.f) return 0.f;
-  const ℝ3 h = (i+o).normalized();
+  // must be geometric and shading front reflection
+  const ℝ3 &n = hinfo.F.z;
+  if (!hinfo.front || (i|n)<0.f || (o|n)<0.f) { return 0.f; }
+
+  // specular lobe prob
+  ℝ3 h = i+o;
+  const float len2_h = h.len2();
+  if (len2_h < ε<float>) h = (n-(n|o)*o).normalized();
+  else h/=sqrtf(len2_h);
   return p*std::powf(o|h,tf.α+1)*(tf.α+1)*.5f*inv_π<float>*.25f;
 }
 

@@ -90,10 +90,10 @@ namespace simd
     constexpr size_t l = 8;
     for (size_t i=0; i+l<=n; i+=l)
     {
-      __m256 va = _mm256_load_ps(a+i);
-      __m256 vb = _mm256_load_ps(b+i);
+      __m256 va = _mm256_loadu_ps(a+i);
+      __m256 vb = _mm256_loadu_ps(b+i);
       __m256 vx = _mm256_add_ps(va, vb);
-      _mm256_store_ps(x+i, vx);
+      _mm256_storeu_ps(x+i, vx);
     }
     for (size_t j=n-n%l; j<n; j++) { x[j] = a[j]+b[j]; }
   }
@@ -107,10 +107,10 @@ namespace simd
     constexpr size_t l = 4;
     for (size_t i=0; i+l<=n; i+=l)
     {
-      __m256d va = _mm256_load_pd(a+i);
-      __m256d vb = _mm256_load_pd(b+i);
+      __m256d va = _mm256_loadu_pd(a+i);
+      __m256d vb = _mm256_loadu_pd(b+i);
       __m256d vx = _mm256_add_pd(va, vb);
-      _mm256_store_pd(x+i, vx);
+      _mm256_storeu_pd(x+i, vx);
     }
     for (size_t j=n-n%l; j<n; j++) { x[j] = a[j]+b[j]; }
   }
@@ -124,10 +124,10 @@ namespace simd
     constexpr size_t l = 8;
     for (size_t i=0; i+l<=n; i+=l)
     {
-      __m256 va = _mm256_load_ps(a+i);
-      __m256 vb = _mm256_load_ps(b+i);
+      __m256 va = _mm256_loadu_ps(a+i);
+      __m256 vb = _mm256_loadu_ps(b+i);
       __m256 vx = _mm256_sub_ps(va, vb);
-      _mm256_store_ps(x+i, vx);
+      _mm256_storeu_ps(x+i, vx);
     }
     for (size_t j=n-n%l; j<n; j++) { x[j] = a[j]-b[j]; }
   }
@@ -141,10 +141,10 @@ namespace simd
     constexpr size_t l = 8;
     for (size_t i=0; i+l<=n; i+=l)
     {
-      __m256 va = _mm256_load_ps(a+i);
-      __m256 vb = _mm256_load_ps(b+i);
+      __m256 va = _mm256_loadu_ps(a+i);
+      __m256 vb = _mm256_loadu_ps(b+i);
       __m256 vx = _mm256_mul_ps(va, vb);
-      _mm256_store_ps(x+i, vx);
+      _mm256_storeu_ps(x+i, vx);
     }
     for (size_t j=n-n%l; j<n; j++) { x[j] = a[j]*b[j]; }
   }
@@ -158,10 +158,10 @@ namespace simd
     constexpr size_t l = 8;
     for (size_t i=0; i+l<=n; i+=l)
     {
-      __m256 va = _mm256_load_ps(a+i);
-      __m256 vb = _mm256_load_ps(b+i);
+      __m256 va = _mm256_loadu_ps(a+i);
+      __m256 vb = _mm256_loadu_ps(b+i);
       __m256 vx = _mm256_div_ps(va, vb);
-      _mm256_store_ps(x+i, vx);
+      _mm256_storeu_ps(x+i, vx);
     }
     for (size_t j=n-n%l; j<n; j++) { x[j] = a[j]/b[j]; }
   }

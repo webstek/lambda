@@ -6,13 +6,20 @@
 /// @brief program entry point
 // ****************************************************************************
 #include <print>
+#ifdef DEBUG
+#include <fenv.h>
+#endif
 #include "lambda.hpp"
 // ************************************
 
 int main(int argc, char **argv)
 {
+  // enable FP traps if in debug
+  #ifdef DEBUG
+  feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
+  #endif
+  
   Lambda λ;
-
   // check command line arguments
   int argn;
   while ((argn = getopt(argc, argv, "b:s:p:")) != -1)
