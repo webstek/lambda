@@ -21,7 +21,9 @@ Navigate to `bin/`, call `./lambda <fpath> -s <SPP> -b <MAX_BOUNCES> -p <BOUNCE_
 
 ## Future Work
 * Tone mapping
+* Estimated render time output
 * Distributed rendering
+* Bidirectional path tracing
 * Anisotropic Microfacet material
 * Absorption
 * Volumetric scattering

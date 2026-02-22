@@ -870,10 +870,13 @@ struct blinn : item
   float α, p_d, p_spec, w_r, w_t;
   constexpr void init() 
   { 
-    p_d    = Kd|Kd;
-    w_r    = Ks|Ks;
-    w_t    = Kt|Kt;
-    p_spec = 1.f-p_d;
+    float diff = sqrtf(Kd|Kd);
+    w_r = sqrtf(Ks|Ks);
+    w_t = sqrtf(Kt|Kt);
+    float tot = diff+w_r+w_t;
+    assert(tot>0.f);
+    p_d = diff/tot;
+    p_spec = (w_r+w_t)/tot;
   }
   /// @todo clean up with templates
   constexpr float F0(float n) const
@@ -889,6 +892,7 @@ struct blinn : item
     float p_r = w_r+F*w_t;
     float p_t = (1.f-F)*w_t;
     float const tot = p_r+p_t;
+    if (tot==0.f) { return {1.f, 0.f}; }
     p_r/=tot;
     p_t/=tot;
     return {p_r, p_t};
