@@ -45,8 +45,9 @@
 # performance data
 *.data*
 
-# executable
+# executable and renders
 bin/lambda
+bin/render/**
 
 # build folder
 build/

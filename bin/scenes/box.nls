@@ -11,7 +11,7 @@
     "name": "sphere-light",
     "type": "sphere",
     "transform": {"translate": [0,0,18]},
-    "radiance": [259,259,259]}],
+    "radiance": {"val": "spectra/CIE_std_illum_D65.csv","mult": 0.011}}],
 "objects": [
   {
     "name": "sphere1",
@@ -65,30 +65,30 @@
   {
     "name": "wall-grey",
     "type": "lambertian",
-    "albedo": [0.7, 0.7, 0.7]},
+    "albedo": {"val": 0.7}},
   {
     "name": "wall-red",
     "type": "lambertian",
-    "albedo": [0.7, 0.14, 0.14]},
+    "albedo": {"val": [0.7, 0.14, 0.14]}},
   {
     "name": "wall-green",
     "type": "lambertian",
-    "albedo": [0.14, 0.7, 0.14]},
+    "albedo": {"val": [0.14, 0.7, 0.14]}},
   {
     "name": "reflective",
     "type": "blinn",
-    "Ks": [0.9, 0.9, 0.9],
+    "Ks": {"val": 0.9},
     "glossiness": 128},
   {
     "name": "refractive",
     "type": "blinn",
     "glossiness": 1024,
-    "Kt": [0.9, 0.9, 0.9],
-    "ior": "spectra/flintglass.csv"},
+    "Kt": {"val": 0.9},
+    "ior": {"val": 1.52}},
   {
     "name": "smooth",
     "type": "blinn",
-    "Kd": 0.7,
-    "Ks": 0.3,
+    "Kd": {"val": 0.7},
+    "Ks": {"val": 0.3},
     "glossiness": 64}]
 }

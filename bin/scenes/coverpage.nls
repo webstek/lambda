@@ -1,13 +1,13 @@
 {
 "camera": {
   "pos": [0, 25, 12],
-  "look_at": [0, 0, 3],
+  "look_at": [0, -8, 2],
   "up": [0, 0, 1],
-  "fov": 35,
-  "dof": 0.5,
+  "fov": 30,
+  "dof": 0.0,
   "f": 25,
-  "ar": 2.33,
-  "width": 3840},
+  "ar": 1.7778,
+  "width": 1920},
 "lights": [
   {
     "name": "center",
@@ -16,21 +16,49 @@
     "radiance": {"val": "spectra/CIE_std_illum_D65.csv", "mult": 0.0125}}],
 "objects": [
   {
-    "name": "clear-teapot",
+    "name": "right-teapot",
     "type": "trimesh",
-    "transform": {"translate": [-8,0,0.01], 
-                  "scale": [2,2,2], 
+    "transform": {"translate": [-9,0,0.01], 
+                  "scale": [1.5,1.5,1.5], 
                   "rotate": {"axis":[0,0,1], "degrees": -30}},
+    "material": "red",
+    "source": "models/teapot_20.obj"},
+  {
+    "name": "left-teapot",
+    "type": "trimesh",
+    "transform": {"translate": [7,0,0.01], 
+                  "scale": [2,2,2], 
+                  "rotate": {"axis":[0,0,1], "degrees": -150}},
     "material": "refractive",
     "source": "models/teapot_20_full.obj"},
   {
-    "name": "thinfilm-teapot",
+    "name": "back-teapot",
     "type": "trimesh",
-    "transform": {"translate": [6,0,0.01], 
-                  "scale": [2,2,2], 
-                  "rotate": {"axis":[0,0,1], "degrees": -30}},
+    "transform": {"translate": [-1,-8,0.01], 
+                  "scale": [1.8,1.8,1.8], 
+                  "rotate": {"axis":[0,0,1], "degrees": 0}},
     "material": "thinfilm",
     "source": "models/teapot_20.obj"},
+  {
+    "name": "dragon",
+    "type": "trimesh",
+    "transform": {"translate": [-10,-13,0], 
+                  "scale": [1.6,1.6,1.6], 
+                  "rotate": {"axis": [0,0,1], "degrees": 70}},
+    "material": "yellow",
+    "source": "models/dragon.obj"},
+  {
+    "name": "rect",
+    "type": "trimesh",
+    "transform": {"translate": [8.5,-17.5,0], "scale": [2,5,1.15],
+                  "rotate": {"axis": [0,0,1], "degrees": 55}},
+    "material": "specular",
+    "source": "models/tallprism.obj"},
+  {
+    "name": "sphere1",
+    "type": "sphere",
+    "transform": {"translate": [-2,0,1], "scale": [2.5,2.5,1]},
+    "material": "refractive"},
   {
     "name": "wall-bot",
     "type": "plane",
@@ -49,7 +77,12 @@
     "type": "blinn",
     "Kd": {"val": "spectra/floor.csv", "mult": 0.05},
     "Ks": {"val": 0.8},
-    "glossiness": 256},
+    "glossiness": 128},
+  {
+    "name": "specular",
+    "type": "blinn",
+    "Ks": {"val": "spectra/polished_silver.csv"},
+    "glossiness": 4096},
   {
     "name": "refractive",
     "type": "blinn",
@@ -57,6 +90,18 @@
     "Kd": {"val": 0.01},
     "Kt": {"val": 0.95},
     "ior": {"val": "spectra/In2O3-SnO2.csv"}},
+  {
+    "name": "red",
+    "type": "blinn",
+    "glossiness": 256,
+    "Kd": {"val": "spectra/dupont_red_orange_21.csv"},
+    "Ks": {"val": [0.25,0.24,0.23]}},
+  {
+    "name": "yellow",
+    "type": "blinn",
+    "Kd": {"val": [0.95, 0.35, 0.0], "mult": 0.8},
+    "Ks": {"val": 0.2},
+    "glossiness": 64},
   {
     "name": "thinfilm",
     "type": "thinfilm",
