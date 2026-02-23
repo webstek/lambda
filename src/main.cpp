@@ -1,23 +1,18 @@
 // ****************************************************************************
 /// @file main.cpp
 /// @author Kyle Webster
-/// @version 0.2
-/// @date Dec 12 2025
+/// @version 0.3
+/// @date Feb 22 2026
 /// @brief program entry point
 // ****************************************************************************
 #include <print>
-#ifdef DEBUG
 #include <fenv.h>
-#endif
 #include "lambda.hpp"
 // ************************************
 
 int main(int argc, char **argv)
 {
-  // enable FP traps if in debug
-  #ifdef DEBUG
-  feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
-  #endif
+  feenableexcept(FE_INVALID | FE_DIVBYZERO );
   
   Lambda λ;
   // check command line arguments
@@ -32,10 +27,18 @@ int main(int argc, char **argv)
     default: std::println("Usage: ./lambda <fileName> [args]"); return 1;
     }
   }
+  
+  // load scene from file
   const char* fileName = argv[optind];
-  λ.renderer.loadScene(fileName);
-  λ.renderer.render();
-  λ.renderer.saveImage();
+  if (!λ.loadScene(fileName)) 
+    { std::println("Failed to load scene."); return 1; }
+
+  // allocate image buffers
+  rendering raw_buffer;
+  rendering img_buffer;
+  λ.renderer.render(λ.scene, raw_buffer);
+  λ.renderer.toneMap(raw_buffer, img_buffer);
+  λ.renderer.saveImage(img_buffer,fileName);
   
   return 0;
 }

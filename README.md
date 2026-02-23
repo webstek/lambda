@@ -10,6 +10,7 @@ Sample rendering of two teapots on a glossy floor at 32768 samples per pixel ill
 * Wide BVH with 8-way AVX2 box intersection
 * Instanced triangle meshes and materials
 * Blinn, Lambertian, and thin-film materials
+* Filmic tone-mapping
 * Scene definition in `.nls` files
 
 ## Building
@@ -20,10 +21,10 @@ Navigate to `bin/`, call `./lambda <fpath> -s <SPP> -b <MAX_BOUNCES> -p <BOUNCE_
 
 
 ## Future Work
-* Tone mapping
 * Estimated render time output
 * Distributed rendering
 * Bidirectional path tracing
+* Scene level BVH
 * Anisotropic Microfacet material
 * Absorption
 * Volumetric scattering

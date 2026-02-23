@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file renderer.cpp
 /// @author Kyle Webster
-/// @version 0.5
-/// @date 02 Feb 2026
+/// @version 0.6
+/// @date 22 Feb 2026
 /// @brief Renderer implementation
 // ****************************************************************************
 #include "renderer.hpp"
@@ -11,58 +11,58 @@ using namespace nl::cg;
 using ℝ3 = nl::ℝ3;
 // ************************************
 
-void Renderer::render()
+void Renderer::render(scene const &scene, rendering &buffer)
 {
-  const uint64_t w = scene.cam.width; const uint64_t h = scene.cam.height;
-  image.init(w,h);
+  uint64_t const w = scene.cam.width; const uint64_t h = scene.cam.height;
+  buffer.img.init(w,h);
 
-  std::vector<XYZ> irradiance(w*h,0.f);
+  std::vector<nl::cg::coefficientλ<nl::cg::Nλ>> irradiance(w*h,0.f);
   nl::cg::coefficientλ<nl::cg::Nλ> sample_spec(0.f);
 
-  #ifndef DEBUG 
-  #pragma omp parallel
-  #endif
-  { // ** begin parallel region ***************************
-
   #ifndef DEBUG
+  #pragma omp parallel
+  { // ** begin parallel region ***************************
   #pragma omp for collapse(2) schedule(runtime)
   #endif
   for (uint64_t i=0;i<h;i++) for (uint64_t j=0;j<w;j++)
   { // compute pixel
     nl::RNG rng(i*w+j);
-    XYZ irrad_acc = 0.f;
+    nl::cg::coefficientλ<nl::cg::Nλ> irrad_acc(0.f);
     for (uint64_t k=0;k<SPP;k++)
     { // trace a single path
+      // ray sample info
       sample::info<ray> si;
       nl::ℝ2 const uv = {float(j+rng.flt()), float(i+rng.flt())};
       sample::camera(scene.cam, uv, si, rng);
+
+      // wavelength sample info
       sample::info<heroλ> si_λ;
       sample::spectrum(sample_spec, si_λ, rng);
-      heroλ irrad = tracePath(si_λ.val, si.val, rng, 0);
-      for (int i=0; i<HERO_SAMPLES; i++) 
-        { irrad_acc += λ2XYZ(si_λ.val[i])*irrad[i]/si_λ.prob; }
+
+      // compute Li along generated ray, add to irradiance
+      heroλ const Li = tracePath(scene, si_λ.val, si.val, rng, 0);
+      irrad_acc.addHeroλ(si_λ.val, Li/si_λ.prob);
     }
-    irradiance[i*w+j] = irrad_acc;
+    irradiance[i*w+j].replaceWith(irrad_acc);
   }
-
-  uint64_t N_SAMPLES = SPP*HERO_SAMPLES;
-
-  /// @todo tone mapping
-  
 
   #ifndef DEBUG
   #pragma omp for schedule(static, 16)
   #endif
   for (uint64_t i=0;i<h;i++) for (uint64_t j=0;j<w;j++)
-  { // write irradiance to image buffer
-    image.data[(h-i-1)*w+j] = 
-      sRGB2rgb24(linRGB2sRGB(XYZ2linRGB(irradiance[i*w+j])/float(N_SAMPLES)));
+  { // Convert irradiance to linear RGB, write to buffer
+    buffer.img.data[(h-i-1)*w+j] = 
+      coefλ2linRGB(irradiance[i*w+j]/float(SPP*HERO_SAMPLES));
   }
+
+  #ifndef DEBUG
   } // ** end of parallel region **************************
+  #endif
 }
 // ****************************************************************************
 
 heroλ Renderer::tracePath(
+  scene const &scene,
   heroλ const &λ, 
   ray const &r, 
   nl::RNG &rng, 
@@ -100,10 +100,10 @@ heroλ Renderer::tracePath(
   sample::light(λ, si_l.val, hinfo, scene, si_i_L, rng);
 
   // evaluate BSDFcosθ for ωi
-  const heroλ coef = BxDFcosθ(λ, mat, si_i_L.val, o, n, hinfo.front);
+  heroλ const coef = BxDFcosθ(λ, mat, si_i_L.val, o, n, hinfo.front);
 
   // Light IS estimate
-  const heroλ L_IS = si_i_L.mult * coef / (si_i_L.prob*si_l.prob);
+  heroλ const L_IS = si_i_L.mult * coef / (si_i_L.prob*si_l.prob);
 
   // ** end of L IS estimate ****************************
 
@@ -121,11 +121,11 @@ heroλ Renderer::tracePath(
 
   // evaluate L(ωi)
   ray const i_ray = {hinfo.p, si_i_mat.val};
-  heroλ Li = tracePath(λ, i_ray, rng, scatters+1);
+  heroλ Li = tracePath(scene, λ, i_ray, rng, scatters+1);
   
   // Material IS estimate
   // #ifdef DEBUG
-  const heroλ M_IS = Li*si_i_mat.mult / si_i_mat.prob;
+  heroλ const M_IS = Li*si_i_mat.mult / si_i_mat.prob;
   // #else
   //   linRGB const M_IS = Li*si_i_mat.weight;
   // #endif
@@ -146,20 +146,45 @@ heroλ Renderer::tracePath(
 }
 // ****************************************************************************
 
-
-void Renderer::loadScene(std::string fpath)
+void Renderer::toneMap(
+  rendering const &in_buffer, rendering &tm_buffer, float Y_MID) const
 {
-  scene_path = fpath;
-  load::loadNLS(scene, fpath);
+  size_t const w = in_buffer.img.width;
+  size_t const h = in_buffer.img.height;
+  size_t const N = w*h;
+  tm_buffer.img.init(w,h);
+  // get log-averaged luminance and max luminance
+  float maxY = 0.f;
+  float sumlogY = 0.f;
+  for (size_t i=0; i<N; i++)
+  { 
+    float const Y = in_buffer.img[i].luma();
+    if (Y > maxY) [[unlikely]] { maxY = Y; }
+    sumlogY += std::log(nl::max(Y,nl::ε<float>));
+  }
+  sumlogY /= float(N);
+  float const Ybar = std::exp(sumlogY);
+  float const exposure = Y_MID/Ybar;
+
+  // Write to tone-mapped buffer
+  for (size_t i=0; i<N; i++)
+  {
+    linRGB c = exposure*in_buffer.img[i];
+    linRGB c_tonemapped = tonemap<tonemapping::koiFilmic>(c);
+    tm_buffer.img[i] = c_tonemapped;
+  }
 }
-void Renderer::saveImage() const
+// ****************************************************************************
+
+void Renderer::saveImage(rendering const &buffer, std::string fpath) const
 {
   std::string fname = "render"+
-    scene_path.substr(6,scene_path.length()-10)+"-"+std::to_string(SPP)+"spp-"
+    fpath.substr(6,fpath.length()-10)+"-"+std::to_string(SPP)+"spp-"
     +std::to_string(MAX_SCATTERINGS)+"b-"
     +std::format("{:.2f}", SAMPLE_P)+"p.png";
+  
+  std::vector<rgb24> const display = buffer.rgb24();
   lodepng::encode(
-    fname, image.data[0].c.elem, image.width, image.height, LCT_RGB, 8);
+    fname, display[0].c.elem, buffer.img.width, buffer.img.height, LCT_RGB, 8);
 }
-
 // ****************************************************************************

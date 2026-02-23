@@ -37,7 +37,7 @@ namespace cg
 
 // ************************************
 /// @name constants
-constexpr uint32_t Nλ = 128;
+constexpr uint32_t Nλ = 80;
 constexpr uint8_t HERO_SAMPLES = 16;
 
 // ************************************
@@ -164,6 +164,39 @@ constexpr rgb24 sRGB2rgb24(sRGB const &x)
 // ** end of RGB **********************
 
 
+namespace tonemapping
+{
+// ********************************************************
+/// @name tone mapping
+
+/// @brief Filmic tone mapping - maps [0,inf) to [0,1]
+/// @param x Value to tone map
+/// @param A Toe strength
+/// @param B Toe brightness
+/// @param C Shoulder Strength
+/// @param D Shoulder brightness
+/// @param E Transition rate
+/// @return filmic tone mapped float
+/// @note From Krzysztof Narkowicz ACES Filmic Tone Mapping Curve blog post
+constexpr float filmicToneMap(float x,float A,float B,float C,float D,float E) 
+{ return (x * (A * x + B)) / (x * (C * x + D) + E); }
+constexpr float const UC2WhitePoint = filmicToneMap(
+  11.2, 0.22, 0.30*0.10, 0.22, 0.30, 0.20*0.30);
+constexpr float UC2Filmic(float L)
+  { return filmicToneMap(L,0.22,0.30*0.10,0.22,0.30,0.20*0.30)/UC2WhitePoint; }
+constexpr float ACESFilmicApprox(float L)
+  { return std::min(1.f, filmicToneMap(0.6*L, 2.51, 0.03, 2.43, 0.59, 0.14)); }
+constexpr float reinhardWP(float L, float whitePoint)
+  { return L*(1+L/(whitePoint*whitePoint)) / (1+L); }
+constexpr float koiTonemap(float L)
+  { return (1.3f*L*L*L+0.15f*L) / (1.3f*L*L*L+0.5f*L+.2f); }
+constexpr float koiFilmic(float L)
+  { return filmicToneMap(10*L,0.3f,0.14f,0.3f,2.8f,10.f); }
+}
+template<float(*TONE_MAPPER)(float)> constexpr linRGB tonemap(linRGB c)
+  { return linRGB(TONE_MAPPER(c.r()),TONE_MAPPER(c.g()),TONE_MAPPER(c.b())); }
+// ** end of tone mapping *********************************
+
 // ************************************
 /// @name spectrums
 
@@ -212,12 +245,12 @@ template <uint32_t n> struct coefficientλ
   float const sup=720;
   float const Δ=(sup-inf)/(n-1);
   bra::ℝn<n,float> v;
+
   constexpr coefficientλ() : v(0.f) {}
   constexpr coefficientλ(float x) {for (uint32_t i=0;i<n;i++) {v[i]=x;}}
   constexpr coefficientλ(coefficientλ const& s) : v(s.v) {}
-  /// @warning assumes samples are in sorted order
   coefficientλ(sampledλ const &s)
-  {
+  { // assumes samples are in sorted order
     size_t j=0;
     for (uint32_t i=0;i<n;i++)
     { // v[i] is the average of sampledλ <= l[i] but > l[i-1]
@@ -237,12 +270,16 @@ template <uint32_t n> struct coefficientλ
       v[i] = sum/Δ;
     }
   }
+  constexpr void replaceWith(coefficientλ const &s)
+    { for (uint32_t i=0; i<n; i++) v[i]=s.v[i]; }
   constexpr coefficientλ operator*(coefficientλ const &s2) const
     { coefficientλ s=*this; s.v*=s2.v; return s; }
   constexpr coefficientλ operator*(float x) const
     { coefficientλ s=*this; s.v=s.v*x; return s; }
   constexpr coefficientλ operator+(coefficientλ const &s2) const
     { coefficientλ s=*this; s.v=s.v+s2.v; return s; }
+  constexpr coefficientλ operator/(float x)
+    { coefficientλ s=*this; s.v=s.v/x; return s; }
   constexpr float operator|(coefficientλ const &s) const
   {
     float sum=0.f;
@@ -266,6 +303,21 @@ template <uint32_t n> struct coefficientλ
   }
   coefficientλ& operator=(coefficientλ&& o) noexcept 
     { for (uint32_t i=0;i<n;i++) {v[i]=std::move(o.v[i]);} return *this; }
+  constexpr void addHeroλ(heroλ const &λ, heroλ const &s)
+  { // Decompose wavelengths corresponding to spectrum, then add s there
+    for (int k=0; k<HERO_SAMPLES; k++)
+    { // for each hero wavelength
+      uint32_t i=0;
+      for (; inf+i*Δ<=λ[k] && i<n; i++) {}
+      // get fraction between wavelength spacings
+      const float l1 = inf+i*Δ;
+      float t  = (l1-λ[k])/Δ;
+      if (i==0) t=1.f;
+      if (i==n) t=0.f;
+      if (i>0) v[i-1] += (1.f-t)*s[k];
+      if (i<n) v[i]   += t*s[k];
+    }
+  }
   std::string toString() const 
   {
     std::string s=""; 
@@ -1052,6 +1104,8 @@ template <typename T> struct image
   size_t width, height;
   std::vector<T> data;
   void init(size_t w, size_t h) {width=w; height=h; data.resize(width*height);}
+  T operator[](size_t i) const { return data[i]; }
+  T &operator[](size_t i) { return data[i]; }
 };
 
 template <typename T>
@@ -1985,7 +2039,7 @@ inline void loadCamera(camera &cam, json const &j)
   loadℝ3(up, j.at("up"));
   load(width, j.at("width"));
   load(fov, j.at("fov"));
-  try { load(ar, j.at("ar")); } catch(...) { ar=1.7778f; } // default 16:9
+  try { load(ar, j.at("ar")); } catch(...) { ar=1.77778f; } // default 16:9
   try { load(dof, j.at("dof")); } catch(...) { dof=0.f; }
   try { load(focal_dist, j.at("f")); } catch(...) { focal_dist=1.f; }
   cam.fov = fov;
@@ -2205,19 +2259,19 @@ inline void loadTriMeshFromFile(trimeshdata &m, std::string const& fpath)
     m.GN.emplace_back((e0^e2).normalized());
     m.F.emplace_back(tri);
 
-    // tangents
-    float const du1 = m.u[tri.u[1]][0]-m.u[tri.u[0]][0];
-    float const du2 = m.u[tri.u[2]][0]-m.u[tri.u[0]][0];
-    float const dv1 = m.u[tri.u[1]][1]-m.u[tri.u[0]][1];
-    float const dv2 = m.u[tri.u[2]][1]-m.u[tri.u[0]][1];
-    float const r = 1.f/(du1*dv2-du2*dv1);
-    ℝ3 const B = r*(e2*du1-e0*du2);
-    m.GT.emplace_back((B^m.GN[f]).normalized());
-    for (unsigned i=0; i<3; i++)
-    { // compute tangent per vertex
-      ℝ3 const tangent = (B^m.N[tri.N[i]]).normalized();
-      m.T[tri.N[i]] = tangent;
-    }
+    // // tangents
+    // float const du1 = m.u[tri.u[1]][0]-m.u[tri.u[0]][0];
+    // float const du2 = m.u[tri.u[2]][0]-m.u[tri.u[0]][0];
+    // float const dv1 = m.u[tri.u[1]][1]-m.u[tri.u[0]][1];
+    // float const dv2 = m.u[tri.u[2]][1]-m.u[tri.u[0]][1];
+    // float const r = 1.f/(du1*dv2-du2*dv1);
+    // ℝ3 const B = r*(e2*du1-e0*du2);
+    // m.GT.emplace_back((B^m.GN[f]).normalized());
+    // for (unsigned i=0; i<3; i++)
+    // { // compute tangent per vertex
+    //   ℝ3 const tangent = (B^m.N[tri.N[i]]).normalized();
+    //   m.T[tri.N[i]] = tangent;
+    // }
     k += 3;
   }
   fast_obj_destroy(obj);
@@ -2395,14 +2449,16 @@ inline bool loadNLS(scene &scene, std::string fpath)
 {
   std::ifstream file(fpath);
   if (!file.is_open()) 
-    {throw std::runtime_error("Could no open file."); return false;}
+    {throw std::runtime_error("Could not open file."); return false;}
   json j;
   file >> j;
 
-  loadCamera(scene.cam, j.at("camera"));
-  loadMaterials(scene.materials, j.at("materials"));
-  loadObjects(scene.objects, scene.meshes, j.at("objects"), scene.materials);
-  loadLights(scene, j.at("lights"));
+  try {
+    loadCamera(scene.cam, j.at("camera"));
+    loadMaterials(scene.materials, j.at("materials"));
+    loadObjects(scene.objects, scene.meshes, j.at("objects"), scene.materials);
+    loadLights(scene, j.at("lights"));
+  } catch(...) { return false; }
   return true;
 }
 
