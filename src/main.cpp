@@ -16,14 +16,16 @@ int main(int argc, char **argv)
   
   Lambda λ;
   // check command line arguments
+  float Y=0.12f;
   int argn;
-  while ((argn = getopt(argc, argv, "b:s:p:")) != -1)
+  while ((argn = getopt(argc, argv, "b:s:p:Y:")) != -1)
   {
     switch (argn)
     {
     case 'b': λ.renderer.MAX_SCATTERINGS = std::stoi(optarg); break;
     case 's': λ.renderer.SPP = std::stoi(optarg); break;
     case 'p': λ.renderer.SAMPLE_P = std::stof(optarg); break;
+    case 'Y': Y = std::stof(optarg); break;
     default: std::println("Usage: ./lambda <fileName> [args]"); return 1;
     }
   }
@@ -37,7 +39,7 @@ int main(int argc, char **argv)
   rendering raw_buffer;
   rendering img_buffer;
   λ.renderer.render(λ.scene, raw_buffer);
-  λ.renderer.toneMap(raw_buffer, img_buffer, 0.12f);
+  λ.renderer.toneMap(raw_buffer, img_buffer, Y);
   λ.renderer.saveImage(img_buffer,fileName);
   
   return 0;
