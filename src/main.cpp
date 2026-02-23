@@ -37,7 +37,7 @@ int main(int argc, char **argv)
   rendering raw_buffer;
   rendering img_buffer;
   λ.renderer.render(λ.scene, raw_buffer);
-  λ.renderer.toneMap(raw_buffer, img_buffer);
+  λ.renderer.toneMap(raw_buffer, img_buffer, 0.12f);
   λ.renderer.saveImage(img_buffer,fileName);
   
   return 0;

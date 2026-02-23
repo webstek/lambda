@@ -170,7 +170,7 @@ void Renderer::toneMap(
   for (size_t i=0; i<N; i++)
   {
     linRGB c = exposure*in_buffer.img[i];
-    linRGB c_tonemapped = tonemap<tonemapping::koiFilmic>(c);
+    linRGB c_tonemapped = tonemap<tonemapping::ACESFilmicApprox>(c);
     tm_buffer.img[i] = c_tonemapped;
   }
 }
@@ -185,6 +185,7 @@ void Renderer::saveImage(rendering const &buffer, std::string fpath) const
   
   std::vector<rgb24> const display = buffer.rgb24();
   lodepng::encode(
-    fname, display[0].c.elem, buffer.img.width, buffer.img.height, LCT_RGB, 8);
+    fname, reinterpret_cast<unsigned char const*>(display.data()), 
+    buffer.img.width, buffer.img.height, LCT_RGB, 8);
 }
 // ****************************************************************************

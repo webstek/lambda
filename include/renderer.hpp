@@ -23,7 +23,7 @@ struct rendering
     for (size_t j=0; j<img.height; j++) for (size_t i=0; i<img.width; i++)
     {
       out.push_back(
-        nl::cg::sRGB2rgb24(nl::cg::linRGB2sRGB(img.data[j*img.height+i])));
+        nl::cg::sRGB2rgb24(nl::cg::linRGB2sRGB(img.data[j*img.width+i])));
     }
     return out;
   }

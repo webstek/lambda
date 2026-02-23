@@ -1,13 +1,13 @@
 {
 "camera": {
   "pos": [0, 25, 12],
-  "look_at": [0, -8, 2],
+  "look_at": [-0.5, -8, 2],
   "up": [0, 0, 1],
   "fov": 30,
   "dof": 0.0,
   "f": 25,
   "ar": 1.7778,
-  "width": 1920},
+  "width": 1280},
 "lights": [
   {
     "name": "center",
