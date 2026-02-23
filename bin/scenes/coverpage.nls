@@ -1,19 +1,19 @@
 {
 "camera": {
-  "pos": [0, 25, 12],
-  "look_at": [-0.5, -8, 2],
+  "pos": [0, 50, 16],
+  "look_at": [-1, -5, 4],
   "up": [0, 0, 1],
-  "fov": 30,
-  "dof": 0.0,
-  "f": 25,
+  "fov": 18,
+  "dof": 0.75,
+  "f": 57,
   "ar": 1.7778,
   "width": 1280},
 "lights": [
   {
     "name": "center",
     "type": "sphere",
-    "transform": {"translate": [0,10,80], "scale": [10,10,10]},
-    "radiance": {"val": "spectra/CIE_std_illum_D65.csv", "mult": 0.0125}}],
+    "transform": {"translate": [0,8,90], "scale": [6,6,6]},
+    "radiance": {"val": "spectra/CIE_std_illum_D65.csv", "mult": 0.02}}],
 "objects": [
   {
     "name": "right-teapot",
@@ -34,7 +34,7 @@
   {
     "name": "back-teapot",
     "type": "trimesh",
-    "transform": {"translate": [-1,-8,0.01], 
+    "transform": {"translate": [-1.5,-8,0.01], 
                   "scale": [1.8,1.8,1.8], 
                   "rotate": {"axis":[0,0,1], "degrees": 0}},
     "material": "thinfilm",
@@ -50,39 +50,39 @@
   {
     "name": "rect",
     "type": "trimesh",
-    "transform": {"translate": [8.5,-17.5,0], "scale": [2,5,1.15],
+    "transform": {"translate": [8.5,-18.5,0], "scale": [3,3,1.25],
                   "rotate": {"axis": [0,0,1], "degrees": 55}},
     "material": "specular",
     "source": "models/tallprism.obj"},
   {
     "name": "sphere1",
     "type": "sphere",
-    "transform": {"translate": [-2,0,1], "scale": [2.5,2.5,1]},
-    "material": "refractive"},
+    "transform": {"translate": [-2,4,1], "scale": [2.5,2.5,1]},
+    "material": "prism"},
   {
     "name": "wall-bot",
     "type": "plane",
-    "transform": {"scale": [64, 18, 1], "translate": [0, -6, 0]},
-    "material": "reflective"},
+    "transform": {"scale": [64, 64, 1], "translate": [0, 0, 0]},
+    "material": "floor"},
   {
     "name": "wall-back",
     "type": "plane",
     "transform": {"scale": [64,32,1],
-                  "translate":[0,-24,32],
+                  "translate":[0,-28,32],
                   "rotate":{"axis":[1,0,0],"degrees":90}},
-    "material": "gray"}],
+    "material": "pink"}],
 "materials": [
   {
-    "name": "reflective",
+    "name": "floor",
     "type": "blinn",
-    "Kd": {"val": "spectra/floor.csv", "mult": 0.05},
-    "Ks": {"val": 0.8},
+    "Kd": {"val": "spectra/dupont_blue_34,csv", "mult": 0.1},
+    "Ks": {"val": "spectra/gold.csv", "mult": 0.85},
     "glossiness": 128},
   {
     "name": "specular",
     "type": "blinn",
     "Ks": {"val": "spectra/polished_silver.csv"},
-    "glossiness": 4096},
+    "glossiness": 8192},
   {
     "name": "refractive",
     "type": "blinn",
@@ -91,17 +91,23 @@
     "Kt": {"val": 0.95},
     "ior": {"val": "spectra/In2O3-SnO2.csv"}},
   {
+    "name": "prism",
+    "type": "blinn",
+    "glossiness": 8192,
+    "Kt": {"val": 0.6},
+    "ior": {"val": "spectra/flintglass.csv"}},
+  {
     "name": "red",
     "type": "blinn",
     "glossiness": 256,
     "Kd": {"val": "spectra/dupont_red_orange_21.csv"},
-    "Ks": {"val": [0.25,0.24,0.23]}},
+    "Ks": {"val": [0.07,0.04,0.03]}},
   {
     "name": "yellow",
     "type": "blinn",
-    "Kd": {"val": [0.95, 0.35, 0.0], "mult": 0.8},
-    "Ks": {"val": 0.2},
-    "glossiness": 64},
+    "Kd": {"val": [0.95, 0.35, 0.0], "mult": 0.75},
+    "Ks": {"val": 0.1},
+    "glossiness": 32},
   {
     "name": "thinfilm",
     "type": "thinfilm",
@@ -109,5 +115,7 @@
     "thickness": 550,
     "film_ior": {"val": "spectra/acetone.csv"},
     "base_ior": {"val": 1.6}},
-  {"name":"gray", "type":"lambertian", "albedo":{"val": "spectra/floor.csv"}}]
+  {"name":"gray", "type":"lambertian", "albedo":{"val": "spectra/floor.csv"}},
+  {"name":"pink", "type":"lambertian", 
+    "albedo":{"val": [1.0,0.5,0.66], "mult": 0.8}}]
 }
