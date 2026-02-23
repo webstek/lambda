@@ -1,15 +1,13 @@
 # λ (Lambda)
 A C++ spectral renderer using my library numli
 
-![](./bin/render/coverpage-32768spp-64b-0.90p.png)
-
-Sample rendering of two teapots on a glossy floor at 32768 samples per pixel illuminated by a D65 illuminant. Left: 550nm thick Acetate thin-film coating. Right: Solid teapot with Indium-Tin Oxide index of refraction.
+![](coverpage-32768spp-32b-0.80p.png)
 
 ## Highlight Features
 * Hero-wavelength Spectral MIS path tracing
 * Wide BVH with 8-way AVX2 box intersection
 * Instanced triangle meshes and materials
-* Blinn, Lambertian, and thin-film materials
+* Blinn, Lambertian, and thin-film materials with measured spectra
 * Filmic tone-mapping
 * Scene definition in `.nls` files
 
@@ -17,7 +15,7 @@ Sample rendering of two teapots on a glossy floor at 32768 samples per pixel ill
 From the project root invoke `make [debug, release]` for debug or release 
 
 ## Usage
-Navigate to `bin/`, call `./lambda <fpath> -s <SPP> -b <MAX_BOUNCES> -p <BOUNCE_PROB>` for rendering.
+Navigate to `bin/`, call `./lambda <fpath> [-s <SPP>, -b <MAX_BOUNCES>, -p <BOUNCE_PROB>, -Y <MID_GREY>]` for rendering.
 
 
 ## Future Work

@@ -170,7 +170,7 @@ void Renderer::toneMap(
   for (size_t i=0; i<N; i++)
   {
     linRGB c = exposure*in_buffer.img[i];
-    linRGB c_tonemapped = tonemap<tonemapping::ACESFilmicApprox>(c);
+    linRGB c_tonemapped = tonemap<tonemapping::koiFilmic>(c);
     tm_buffer.img[i] = c_tonemapped;
   }
 }
