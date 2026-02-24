@@ -1,7 +1,9 @@
 # λ (Lambda)
 A C++ spectral renderer using my library numli
 
-![](coverpage-32768spp-32b-0.80p.png)
+![](coverpage-128000spp-32b-0.80p.png)
+
+128000 sample per pixel rendering highlighting some of the renderer's capabilities. It took 4hr 15min 17.4s on an AMD EPYC 9654P 96-Core Processor with 192 threads.
 
 ## Highlight Features
 * Hero-wavelength Spectral MIS path tracing

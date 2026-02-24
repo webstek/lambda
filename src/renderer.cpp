@@ -176,12 +176,13 @@ void Renderer::toneMap(
 }
 // ****************************************************************************
 
-void Renderer::saveImage(rendering const &buffer, std::string fpath) const
+void Renderer::saveImage(
+  rendering const &buffer, std::string fpath, std::string suffix) const
 {
   std::string fname = "render"+
     fpath.substr(6,fpath.length()-10)+"-"+std::to_string(SPP)+"spp-"
     +std::to_string(MAX_SCATTERINGS)+"b-"
-    +std::format("{:.2f}", SAMPLE_P)+"p.png";
+    +std::format("{:.2f}", SAMPLE_P)+"p"+suffix+".png";
   
   std::vector<rgb24> const display = buffer.rgb24();
   lodepng::encode(

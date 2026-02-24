@@ -35,10 +35,11 @@ int main(int argc, char **argv)
   if (!λ.loadScene(fileName)) 
     { std::println("Failed to load scene."); return 1; }
 
-  // allocate image buffers
+  // allocate image buffers and renders
   rendering raw_buffer;
   rendering img_buffer;
   λ.renderer.render(λ.scene, raw_buffer);
+  λ.renderer.saveImage(raw_buffer,fileName,"-raw");
   λ.renderer.toneMap(raw_buffer, img_buffer, Y);
   λ.renderer.saveImage(img_buffer,fileName);
   

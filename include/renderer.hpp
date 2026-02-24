@@ -47,7 +47,8 @@ public:
     nl::RNG &rng, 
     uint64_t scatters) const;
 
-  void saveImage(rendering const &buffer, std::string fpath) const;
+  void saveImage(
+    rendering const &buffer, std::string fpath, std::string suffix="") const;
 };
 
 // ****************************************************************************
