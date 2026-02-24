@@ -357,13 +357,13 @@ struct ray
   ray(ℝ3 const &p, ℝ3 const &u) : p(p), u(u) 
   { 
     for (int i=0;i<3;i++) 
-      { if (u[i]!=0.f) inv_u[i]=1.f/u[i]; else inv_u[i]=inft<float>; }
+      { if (u[i]!=0.f) inv_u[i]=1.f/u[i]; else inv_u[i]=UB<float>; }
   }
   ray(ℝ4 const &p, ℝ4 const &u) : 
     p({p.elem[0],p.elem[1],p.elem[2]}), u({u.elem[0],u.elem[1],u.elem[2]}) 
   { 
     for (int i=0;i<3;i++) 
-      { if (u[i]!=0.f) inv_u[i]=1.f/u[i]; else inv_u[i]=inft<float>; }
+      { if (u[i]!=0.f) inv_u[i]=1.f/u[i]; else inv_u[i]=UB<float>; }
   }
   constexpr ℝ3 operator()(float t) const { return p+t*u; }
   constexpr std::array<float,6> plucker() const
@@ -533,21 +533,29 @@ struct aabb
 };
 struct aabb_avx2
 {
-  alignas(32) float inf0[8], sup0[8];
-  alignas(32) float inf1[8], sup1[8];
-  alignas(32) float inf2[8], sup2[8];
+  __m256 inf[3];
+  __m256 sup[3];
+
   aabb_avx2() = default;
   aabb_avx2(aabb (&bb)[8])
   {
-    for (int i=0; i<8; i++) 
-    { // copy data from bb into member variables
-      inf0[i]=bb[i].inf[0];
-      inf1[i]=bb[i].inf[1];
-      inf2[i]=bb[i].inf[2];
-      sup0[i]=bb[i].sup[0];
-      sup1[i]=bb[i].sup[1];
-      sup2[i]=bb[i].sup[2];
+    float i0[8], i1[8], i2[8];
+    float s0[8], s1[8], s2[8];
+
+    for (int i=0; i<8; ++i) {
+      i0[i]=bb[i].inf[0];
+      i1[i]=bb[i].inf[1];
+      i2[i]=bb[i].inf[2];
+      s0[i]=bb[i].sup[0];
+      s1[i]=bb[i].sup[1];
+      s2[i]=bb[i].sup[2];
     }
+    inf[0] = _mm256_loadu_ps(i0);
+    inf[1] = _mm256_loadu_ps(i1);
+    inf[2] = _mm256_loadu_ps(i2);
+    sup[0] = _mm256_loadu_ps(s0);
+    sup[1] = _mm256_loadu_ps(s1);
+    sup[2] = _mm256_loadu_ps(s2);
   }
 };
 
@@ -1294,39 +1302,22 @@ TARGET_AVX2 inline void aabb_avx2(
   // broadcast min and max t
   __m256 tmin = _mm256_set1_ps(BIAS);
   __m256 tmax = _mm256_set1_ps(t_max);
+  __m256 zero = _mm256_setzero_ps();
 
-  // load boxes
-  __m256 inf0 = _mm256_loadu_ps(bbs.inf0);
-  __m256 inf1 = _mm256_loadu_ps(bbs.inf1);
-  __m256 inf2 = _mm256_loadu_ps(bbs.inf2);
-  __m256 sup0 = _mm256_loadu_ps(bbs.sup0);
-  __m256 sup1 = _mm256_loadu_ps(bbs.sup1);
-  __m256 sup2 = _mm256_loadu_ps(bbs.sup2);
+  for (int d=0; d<3; d++)
+  { // for each dimension
+    __m256 mask = _mm256_cmp_ps(inv_u[d], zero, _CMP_LT_OQ);
+    __m256 bmin = _mm256_blendv_ps(bbs.inf[d], bbs.sup[d], mask);
+    __m256 bmax = _mm256_blendv_ps(bbs.sup[d], bbs.inf[d], mask);
 
-  // compute distances to planes
-  __m256 t0x = _mm256_mul_ps(_mm256_sub_ps(inf0, p[0]), inv_u[0]);
-  __m256 t1x = _mm256_mul_ps(_mm256_sub_ps(sup0, p[0]), inv_u[0]);
-  __m256 t0y = _mm256_mul_ps(_mm256_sub_ps(inf1, p[1]), inv_u[1]);
-  __m256 t1y = _mm256_mul_ps(_mm256_sub_ps(sup1, p[1]), inv_u[1]);
-  __m256 t0z = _mm256_mul_ps(_mm256_sub_ps(inf2, p[2]), inv_u[2]);
-  __m256 t1z = _mm256_mul_ps(_mm256_sub_ps(sup2, p[2]), inv_u[2]);
+    __m256 dmin = _mm256_mul_ps(_mm256_sub_ps(bmin, p[d]), inv_u[d]);
+    __m256 dmax = _mm256_mul_ps(_mm256_sub_ps(bmax, p[d]), inv_u[d]);
 
-  // find near and far intersection for each axis
-  __m256 tnx = _mm256_min_ps(t0x, t1x);
-  __m256 tfx = _mm256_max_ps(t0x, t1x);
-  __m256 tny = _mm256_min_ps(t0y, t1y);
-  __m256 tfy = _mm256_max_ps(t0y, t1y);
-  __m256 tnz = _mm256_min_ps(t0z, t1z);
-  __m256 tfz = _mm256_max_ps(t0z, t1z);
-
-  // find in and out t vals
-  __m256 tin  = _mm256_max_ps(tnz, _mm256_max_ps(tnx, tny));
-  __m256 tout = _mm256_min_ps(tfz, _mm256_min_ps(tfx, tfy));
-  tin  = _mm256_max_ps(tin, tmin); 
-  tout = _mm256_min_ps(tout, tmax);
-
+    tmin = _mm256_max_ps(dmin, tmin);
+    tmax = _mm256_min_ps(dmax, tmax);
+  }
   // zero out non-intersections, and store result
-  _mm256_storeu_ps(t, _mm256_and_ps(_mm256_cmp_ps(tin, tout, _CMP_LE_OQ), tin));
+  _mm256_storeu_ps(t,_mm256_and_ps(_mm256_cmp_ps(tmin, tmax, _CMP_LE_OQ),tmin));
 }
 
 /// @brief Triangle-Ray intersection using Plucker coordinates
