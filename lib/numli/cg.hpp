@@ -1300,24 +1300,40 @@ TARGET_AVX2 inline void aabb_avx2(
   float (&t)[8])
 {
   // broadcast min and max t
+  __m256 zero = _mm256_setzero_ps();
   __m256 tmin = _mm256_set1_ps(BIAS);
   __m256 tmax = _mm256_set1_ps(t_max);
-  __m256 zero = _mm256_setzero_ps();
 
-  for (int d=0; d<3; d++)
-  { // for each dimension
-    __m256 mask = _mm256_cmp_ps(inv_u[d], zero, _CMP_LT_OQ);
-    __m256 bmin = _mm256_blendv_ps(bbs.inf[d], bbs.sup[d], mask);
-    __m256 bmax = _mm256_blendv_ps(bbs.sup[d], bbs.inf[d], mask);
+  // find closest box intersections
+  __m256 maskx = _mm256_cmp_ps(inv_u[0], zero, _CMP_LT_OQ);
+  __m256 masky = _mm256_cmp_ps(inv_u[1], zero, _CMP_LT_OQ);
+  __m256 maskz = _mm256_cmp_ps(inv_u[2], zero, _CMP_LT_OQ);
+  
+  __m256 bminx = _mm256_blendv_ps(bbs.inf[0], bbs.sup[0], maskx);
+  __m256 bmaxx = _mm256_blendv_ps(bbs.sup[0], bbs.inf[0], maskx);
+  __m256 bminy = _mm256_blendv_ps(bbs.inf[1], bbs.sup[1], masky);
+  __m256 bmaxy = _mm256_blendv_ps(bbs.sup[1], bbs.inf[1], masky);
+  
+  __m256 dminx = _mm256_mul_ps(_mm256_sub_ps(bminx, p[0]), inv_u[0]);
+  __m256 dmaxx = _mm256_mul_ps(_mm256_sub_ps(bmaxx, p[0]), inv_u[0]);
 
-    __m256 dmin = _mm256_mul_ps(_mm256_sub_ps(bmin, p[d]), inv_u[d]);
-    __m256 dmax = _mm256_mul_ps(_mm256_sub_ps(bmax, p[d]), inv_u[d]);
+  __m256 bminz = _mm256_blendv_ps(bbs.inf[2], bbs.sup[2], maskz);
+  __m256 bmaxz = _mm256_blendv_ps(bbs.sup[2], bbs.inf[2], maskz);
 
-    tmin = _mm256_max_ps(dmin, tmin);
-    tmax = _mm256_min_ps(dmax, tmax);
-  }
+  tmin = _mm256_max_ps(dminx,tmin);
+  tmax = _mm256_min_ps(dmaxx,tmax);
+
+  __m256 dminy = _mm256_mul_ps(_mm256_sub_ps(bminy, p[1]), inv_u[1]);
+  __m256 dmaxy = _mm256_mul_ps(_mm256_sub_ps(bmaxy, p[1]), inv_u[1]);
+  __m256 dminz = _mm256_mul_ps(_mm256_sub_ps(bminz, p[2]), inv_u[2]);
+  __m256 dmaxz = _mm256_mul_ps(_mm256_sub_ps(bmaxz, p[2]), inv_u[2]);
+  tmin = _mm256_max_ps(dminy,tmin);
+  tmax = _mm256_min_ps(dmaxy,tmax);
+  tmin = _mm256_max_ps(dminz,tmin);
+  tmax = _mm256_min_ps(dmaxz,tmax);
+  
   // zero out non-intersections, and store result
-  _mm256_storeu_ps(t,_mm256_and_ps(_mm256_cmp_ps(tmin, tmax, _CMP_LE_OQ),tmin));
+  _mm256_storeu_ps(t,_mm256_and_ps(_mm256_cmp_ps(tmin,tmax,_CMP_LE_OQ),tmin));
 }
 
 /// @brief Triangle-Ray intersection using Plucker coordinates
