@@ -40,7 +40,7 @@ void Renderer::render(scene const &scene, rendering &buffer)
       sample::spectrum(sample_spec, si_λ, rng);
 
       // compute Li along generated ray, add to irradiance
-      heroλ const Li = tracePath(scene, si_λ.val, si.val, rng, 0);
+      heroλ const Li = tracePath(scene, si_λ.val, si.val, rng);
       irrad_acc.addHeroλ(si_λ.val, Li/si_λ.prob);
     }
     irradiance[i*w+j].replaceWith(irrad_acc);
@@ -65,84 +65,43 @@ heroλ Renderer::tracePath(
   scene const &scene,
   heroλ const &λ, 
   ray const &r, 
-  nl::RNG &rng, 
-  uint64_t scatters) const
+  nl::RNG &rng) const
 {
-  hitinfo hinfo;
-  if (!intersect::scene(scene, r, hinfo)) { return heroλ(0.f); } // misses
-  
-  ℝ3 const o = -r.u.normalized();
-  ℝ3 const n = hinfo.n();
+  heroλ L(0.f); // radiance accumulation
+  heroλ β(1.f); // throughput
+  ray current = r;
+  uint64_t k=0;
+  for (; k<MAX_SCATTERINGS; k++)
+  { // accumulate path throughput
+    hitinfo hinfo;
+    if (!intersect::scene(scene, current, hinfo)) { β=0.f; break; }
+    ℝ3 const o = -current.u.normalized();
+    ℝ3 const n = hinfo.n();
+    // emitter material
+    Material const &mat = scene.materials[hinfo.mat];
+    if (std::holds_alternative<emitter>(mat)) 
+      { β *= std::get<emitter>(mat).Radiance(λ); break; }
 
-  // check if path hit a light (emitter material)
-  Material const &mat = scene.materials[hinfo.mat];
-  if (std::holds_alternative<emitter>(mat)) 
-    { return std::get<emitter>(mat).Radiance(λ); }
-  if (std::holds_alternative<diremitter>(mat))
-    { return std::get<diremitter>(mat).Radiance(λ,o,hinfo.F.z); }
-
-  // hit an object, scatter if less than max scattering
-  if (scatters > MAX_SCATTERINGS) return heroλ(0.f);
-
-  // ** Light IS estimate *******************************
-  // sample lights in scene: 
-  //   prob = p(li) - prob of choosing light
-  //   val  = pointer to chosen light
-  sample::info<Light const*> si_l;
-  sample::lights(scene.lights, si_l, rng);
-
-  // sample chosen light:
-  //   prob = p(ωi|light)
-  //   val  = ωi
-  //   mult = L(ωi)
-  //   weight = L(ωi)/p(ωi|li)
-  sample::info<ℝ3,heroλ> si_i_L;
-  sample::light(λ, si_l.val, hinfo, scene, si_i_L, rng);
-
-  // evaluate BSDFcosθ for ωi
-  heroλ const coef = BxDFcosθ(λ, mat, si_i_L.val, o, n, hinfo.front);
-
-  // Light IS estimate
-  heroλ const L_IS = si_i_L.mult * coef / (si_i_L.prob*si_l.prob);
-
-  // ** end of L IS estimate ****************************
-
-  // ** Material IS estimate ****************************
-  // sample material:
-  //   prob = p(ωi)
-  //   val  = ωi
-  //   mult = BxDFcosθ
-  //   weight = BxDFcosθ/p(ωi)
-  sample::info<ℝ3,heroλ> si_i_mat;
-  bool const sample = sample::materiali(λ,&mat,hinfo,o,si_i_mat,rng,SAMPLE_P);
-  
-  // no material sample generated, use light IS estimate
-  if (!sample) { return heroλ(L_IS); }
-
-  // evaluate L(ωi)
-  ray const i_ray = {hinfo.p, si_i_mat.val};
-  heroλ Li = tracePath(scene, λ, i_ray, rng, scatters+1);
-  
-  // Material IS estimate
-  // #ifdef DEBUG
-  heroλ const M_IS = Li*si_i_mat.mult / si_i_mat.prob;
-  // #else
-  //   linRGB const M_IS = Li*si_i_mat.weight;
-  // #endif
-  // ** end of Material IS estimate *********************
-
-  // ** MIS estimate ************************************
-  float const p_L_mati = sample::probForLight(si_l.val, i_ray)*si_l.prob;
-  float const p_mat_Li = 
-    sample::probForMateriali(λ[0], &mat, hinfo, si_i_L.val, o, SAMPLE_P);
-
-  // power heuristic weights, β=2
-  float const p_L_i = si_i_L.prob*si_l.prob;
-  float const w_L = p_L_i*p_L_i / (p_L_i*p_L_i + p_mat_Li*p_mat_Li);
-  float const w_mat = si_i_mat.prob*si_i_mat.prob 
-    / (si_i_mat.prob*si_i_mat.prob + p_L_mati*p_L_mati);
-
-  return M_IS*w_mat + L_IS*w_L;
+    // add direct illumination
+    sample::info<Light const*> si_light;
+    sample::lights(scene.lights, si_light, rng);
+    sample::info<ℝ3,heroλ> si_Li;
+    sample::light(λ, si_light.val, hinfo, scene, si_Li, rng);
+    heroλ const coef = BxDFcosθ(λ,mat,si_Li.val, o, n, hinfo.front);
+    heroλ const Lo_light = si_Li.mult*coef/(si_Li.prob*si_light.prob);
+    /// @todo MIS weighting
+    L += β*Lo_light; // add direct lighting scattered into path
+    
+    // check for scattering
+    sample::info<ℝ3,heroλ> si_f;
+    bool const sample = sample::materiali(λ,&mat,hinfo,o,si_f,rng,SAMPLE_P);
+    if (!sample) { β=0.f; break; }
+    // update throughput, prep for next loop
+    β *= si_f.mult / si_f.prob;
+    current = {hinfo.p, si_f.val};
+  }
+  if (k==MAX_SCATTERINGS) β=0.f;
+  return L + β;
 }
 // ****************************************************************************
 

@@ -44,8 +44,7 @@ public:
     nl::cg::scene const &scene,
     nl::cg::heroλ const &λ, 
     nl::cg::ray const &ray, 
-    nl::RNG &rng, 
-    uint64_t scatters) const;
+    nl::RNG &rng) const;
 
   void saveImage(
     rendering const &buffer, std::string fpath, std::string suffix="") const;
