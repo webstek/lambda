@@ -70,17 +70,31 @@ heroλ Renderer::tracePath(
   heroλ L(0.f); // radiance accumulation
   heroλ β(1.f); // throughput
   ray current = r;
+  float p_light = 0.f; // previous light chosen prob
+  float p_b = 0.f;     // BxDF i sample prob
+  Light const* prev_light = nullptr;
   uint64_t k=0;
   for (; k<MAX_SCATTERINGS; k++)
-  { // accumulate path throughput
+  { // accumulate radiance along path
     hitinfo hinfo;
-    if (!intersect::scene(scene, current, hinfo)) { β=0.f; break; }
+    if (!intersect::scene(scene, current, hinfo)) { break; } // exits scene
     ℝ3 const o = -current.u.normalized();
     ℝ3 const n = hinfo.n();
-    // emitter material
+
+    // hits emitter material
     Material const &mat = scene.materials[hinfo.mat];
     if (std::holds_alternative<emitter>(mat)) 
-      { β *= std::get<emitter>(mat).Radiance(λ); break; }
+    { 
+      heroλ const Le = std::get<emitter>(mat).Radiance(λ);
+      if (k==0) { L += β*Le; } // no bounce to compute MIS for
+      else 
+      { // compute MIS weight for emitter
+        float const p_l = p_light*sample::probForLight(prev_light, current); 
+        float const w_b = nl::stoch::PowerHeuristic(1,p_b,1,p_l);
+        L += β*w_b*Le;
+      }
+      break;
+    }
 
     // add direct illumination
     sample::info<Light const*> si_light;
@@ -88,20 +102,27 @@ heroλ Renderer::tracePath(
     sample::info<ℝ3,heroλ> si_Li;
     sample::light(λ, si_light.val, hinfo, scene, si_Li, rng);
     heroλ const coef = BxDFcosθ(λ,mat,si_Li.val, o, n, hinfo.front);
-    heroλ const Lo_light = si_Li.mult*coef/(si_Li.prob*si_light.prob);
-    /// @todo MIS weighting
-    L += β*Lo_light; // add direct lighting scattered into path
+    float const p_l = si_Li.prob*si_light.prob;
+    heroλ const Lo_light = si_Li.mult*coef/p_l;
+    float const mat_pdf = 
+      sample::probForMateriali(λ[0],&mat,hinfo,si_Li.val,o,1.f);
+    float const w_l = nl::stoch::PowerHeuristic(1,p_l,1,mat_pdf);
+    L += β*w_l*Lo_light;
     
     // check for scattering
     sample::info<ℝ3,heroλ> si_f;
-    bool const sample = sample::materiali(λ,&mat,hinfo,o,si_f,rng,SAMPLE_P);
-    if (!sample) { β=0.f; break; }
+    float const p_sample = nl::min(SAMPLE_P, β[0]*SAMPLE_P);
+    bool const sample = sample::materiali(λ,&mat,hinfo,o,si_f,rng,p_sample);
+    if (!sample) { break; }
+
     // update throughput, prep for next loop
     β *= si_f.mult / si_f.prob;
     current = {hinfo.p, si_f.val};
+    p_b = si_f.prob;
+    p_light = si_light.prob;
+    prev_light = si_light.val;
   }
-  if (k==MAX_SCATTERINGS) β=0.f;
-  return L + β;
+  return heroλ(L);
 }
 // ****************************************************************************
 

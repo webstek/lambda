@@ -1,22 +1,22 @@
 // ****************************************************************************
 /// @file stoch.hpp
 /// @author Kyle Webster
-/// @version 0.2
-/// @date 6 Dec 2025
+/// @version 0.3
+/// @date Mar 11 2026
 /// @brief Numerics Library - Stochastic @ref stoch
 /// @details
 /// Collection of utilities related to stochastic processes
 // ****************************************************************************
 #ifndef STOCH_HPP
 #define STOCH_HPP
-// ************************************
+// ********************************************************
 #include <cstdint>
 #include <stdfloat>
 #include <random>
 
 #include "numli.hpp"
 #include "bra.hpp"
-// ************************************
+// ********************************************************
 namespace nl
 {
 
@@ -47,7 +47,7 @@ private:
 };
 
 
-// ************************************
+// ********************************************************
 /// @name sampling
 
 constexpr ℝ3 UnifHemi(float x0, float x1)
@@ -66,12 +66,23 @@ constexpr ℝ3 CosHemi(float x0, float x1)
   float const φ    = 2.f*π<float>*x1;
   return {sinθ*cosf(φ), sinθ*sinf(φ), cosθ};
 }
-// ** end of sampling *****************
+// ** end of sampling *************************************
 
-} // ** end of namespace nl::stoch ****
+// ********************************************************
+/// @name monte-carlo
+
+template<std::floating_point T> 
+constexpr T PowerHeuristic(uint64_t nf, T f, uint64_t ng, T g, int n=T(2))
+{ 
+  T const qf = nf*f; 
+  T const qg = ng*g; 
+  return std::pow(qf,n) / ( std::pow(qf,n)+std::pow(qg,n) );
+}
+
+} // ** end of namespace nl::stoch ************************
 
 using RNG = stoch::RNG;
-} // ** end of namespace nl ***********
+} // ** end of namespace nl *******************************
 
 // ****************************************************************************
 #endif // #ifndef STOCH_HPP
