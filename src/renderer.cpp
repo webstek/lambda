@@ -111,8 +111,7 @@ heroλ Renderer::tracePath(
     
     // check for scattering
     sample::info<ℝ3,heroλ> si_f;
-    float const p_sample = nl::min(SAMPLE_P, β[0]*SAMPLE_P);
-    bool const sample = sample::materiali(λ,&mat,hinfo,o,si_f,rng,p_sample);
+    bool const sample = sample::materiali(λ,&mat,hinfo,o,si_f,rng,SAMPLE_P);
     if (!sample) { break; }
 
     // update throughput, prep for next loop
