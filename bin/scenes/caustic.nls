@@ -12,17 +12,17 @@
    {
       "name": "sphere-light",
       "type": "sphere",
-      "transform": {"translate": [0,10,10], "scale":[1,1,1]},
+      "transform": {"translate": [0,10,12], "scale":[1,1,1]},
       "radiance": {"val": "spectra/CIE_std_illum_D65.csv", "mult": 0.003}}],
   "objects": [
     {
       "name": "dragon",
       "type": "trimesh",
-      "transform": {"translate": [0,0,0], 
-                    "scale": [0.15,0.15,0.15], 
+      "transform": {"translate": [0,0,-2], 
+                    "scale": [2,2,2], 
                     "rotate": {"axis":[1,0,0], "degrees": -90}},
       "material": "refractive",
-      "source": "models/rooster.obj"},
+      "source": "models/bunny.obj"},
     {
       "name": "wall-top",
       "type": "plane",

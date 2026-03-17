@@ -18,11 +18,12 @@ int main(int argc, char **argv)
   // check command line arguments
   float Y=0.12f;
   int argn;
-  while ((argn = getopt(argc, argv, "b:s:p:Y:")) != -1)
+  while ((argn = getopt(argc, argv, "b:l:s:p:Y:")) != -1)
   {
     switch (argn)
     {
-    case 'b': λ.renderer.MAX_SCATTERINGS = std::stoi(optarg); break;
+    case 'b': λ.renderer.MAX_CAMERA_SCATTERS = std::stoi(optarg); break;
+    case 'l': λ.renderer.MAX_LIGHT_SCATTERS = std::stoi(optarg); break;
     case 's': λ.renderer.SPP = std::stoi(optarg); break;
     case 'p': λ.renderer.SAMPLE_P = std::stof(optarg); break;
     case 'Y': Y = std::stof(optarg); break;

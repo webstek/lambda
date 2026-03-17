@@ -32,9 +32,10 @@ struct rendering
 class Renderer
 {
 public:
-  uint64_t MAX_SCATTERINGS = 4;
-  uint64_t SPP   = 4;
-  float SAMPLE_P = 0.5;
+  uint64_t MAX_CAMERA_SCATTERS = 4;
+  uint64_t MAX_LIGHT_SCATTERS = 4;
+  uint64_t SPP   = 1;
+  float SAMPLE_P = 1.0;
 
   void render(nl::cg::scene const &scene, rendering &buffer);
   void toneMap(

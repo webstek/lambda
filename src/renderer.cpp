@@ -74,7 +74,7 @@ heroλ Renderer::tracePath(
   float p_b = 0.f;     // BxDF i sample prob
   Light const* prev_light = nullptr;
   uint64_t k=0;
-  for (; k<MAX_SCATTERINGS; k++)
+  for (; k<MAX_CAMERA_SCATTERS; k++)
   { // accumulate radiance along path
     hitinfo hinfo;
     if (!intersect::scene(scene, current, hinfo)) { break; } // exits scene
@@ -160,7 +160,7 @@ void Renderer::saveImage(
 {
   std::string fname = "render"+
     fpath.substr(6,fpath.length()-10)+"-"+std::to_string(SPP)+"spp-"
-    +std::to_string(MAX_SCATTERINGS)+"b-"
+    +std::to_string(MAX_CAMERA_SCATTERS)+"b-"
     +std::format("{:.2f}", SAMPLE_P)+"p"+suffix+".png";
   
   std::vector<rgb24> const display = buffer.rgb24();
