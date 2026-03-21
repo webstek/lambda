@@ -6,8 +6,8 @@
   "fov": 18,
   "dof": 0.2,
   "f": 57,
-  "ar": 1.7778,
-  "width": 1280},
+  "ar": 4,
+  "width": 1584},
 "lights": [
   {
     "name": "center",
@@ -18,7 +18,7 @@
   {
     "name": "right-teapot",
     "type": "trimesh",
-    "transform": {"translate": [-9,0,0.01], 
+    "transform": {"translate": [-13,2,0.01], 
                   "scale": [1.5,1.5,1.5], 
                   "rotate": {"axis":[0,0,1], "degrees": -30}},
     "material": "red",
@@ -26,26 +26,34 @@
   {
     "name": "left-teapot",
     "type": "trimesh",
-    "transform": {"translate": [7,0,0.01], 
-                  "scale": [2,2,2], 
+    "transform": {"translate": [11,0,0.01], 
+                  "scale": [1.6,1.6,1.6], 
                   "rotate": {"axis":[0,0,1], "degrees": -150}},
     "material": "refractive",
     "source": "models/teapot_20_full.obj"},
   {
     "name": "back-teapot",
     "type": "trimesh",
-    "transform": {"translate": [-1.5,-8,0.01], 
-                  "scale": [1.8,1.8,1.8], 
+    "transform": {"translate": [-1.5,-7,0.01], 
+                  "scale": [2.5,2.5,2.5], 
                   "rotate": {"axis":[0,0,1], "degrees": 0}},
     "material": "thinfilm",
     "source": "models/teapot_20.obj"},
   {
     "name": "dragon",
     "type": "trimesh",
-    "transform": {"translate": [-10,-13,0], 
+    "transform": {"translate": [-14,-13,0], 
                   "scale": [1.6,1.6,1.6], 
                   "rotate": {"axis": [0,0,1], "degrees": 70}},
     "material": "yellow",
+    "source": "models/dragon.obj"},
+  {
+    "name": "tfdragon",
+    "type": "trimesh",
+    "transform": {"translate": [22,-5,0], 
+                  "scale": [1.4,1.4,1.4], 
+                  "rotate": {"axis": [0,0,1], "degrees": 45}},
+    "material": "thinfilm2",
     "source": "models/dragon.obj"},
   {
     "name": "rect",
@@ -59,6 +67,11 @@
     "type": "sphere",
     "transform": {"translate": [-2,4,1], "scale": [2.5,2.5,1]},
     "material": "prism"},
+  {
+    "name": "sphere2",
+    "type": "sphere",
+    "transform": {"translate": [-26,-5,2.5], "scale": [3,3,3]},
+    "material": "cyan"},
   {
     "name": "wall-bot",
     "type": "plane",
@@ -81,7 +94,8 @@
   {
     "name": "specular",
     "type": "blinn",
-    "Ks": {"val": "spectra/polished_silver.csv"},
+    "Kd": {"val": 0.1},
+    "Ks": {"val": "spectra/polished_silver.csv", "mult": 0.9},
     "glossiness": 8192},
   {
     "name": "refractive",
@@ -109,12 +123,25 @@
     "Ks": {"val": 0.1},
     "glossiness": 32},
   {
+    "name": "cyan",
+    "type": "blinn",
+    "Kd": {"val": [0.0, 0.4, 0.4]},
+    "Ks": {"val": 0.1},
+    "glossiness": 8},
+  {
     "name": "thinfilm",
     "type": "thinfilm",
     "glossiness": 1024,
     "thickness": 550,
     "film_ior": {"val": "spectra/acetone.csv"},
     "base_ior": {"val": 1.6}},
+  {
+    "name": "thinfilm2",
+    "type": "thinfilm",
+    "glossiness": 256,
+    "thickness": 500,
+    "film_ior": {"val": "spectra/In2O3-SnO2.csv"},
+    "base_ior": {"val": 1.4}},
   {"name":"gray", "type":"lambertian", "albedo":{"val": "spectra/floor.csv"}},
   {"name":"pink", "type":"lambertian", 
     "albedo":{"val": [1.0,0.5,0.66], "mult": 0.8}}]
