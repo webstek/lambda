@@ -41,10 +41,10 @@ public:
   void toneMap(
     rendering const &buffer, rendering &tm_buffer, float Y_MID=0.12f) const;
 
-  nl::cg::heroλ tracePath(
+  void tracePath(
     nl::cg::scene const &scene,
-    nl::cg::heroλ const &λ, 
-    nl::cg::ray const &ray, 
+    nl::cg::ray const &ray,
+    sample::info<nl::cg::heroλ,nl::cg::heroλ> pinfo,
     nl::RNG &rng) const;
 
   void saveImage(

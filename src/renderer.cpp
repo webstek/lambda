@@ -19,6 +19,7 @@ void Renderer::render(scene const &scene, rendering &buffer)
   std::vector<nl::cg::coefficientλ<nl::cg::Nλ>> irradiance(w*h,0.f);
   nl::cg::coefficientλ<nl::cg::Nλ> sample_spec(0.f);
 
+  /// @todo add adaptive sampling
   #ifndef DEBUG
   #pragma omp parallel
   { // ** begin parallel region ***************************
@@ -35,17 +36,15 @@ void Renderer::render(scene const &scene, rendering &buffer)
       nl::ℝ2 const uv = {float(j+rng.flt()), float(i+rng.flt())};
       sample::camera(scene.cam, uv, si, rng);
 
-      // wavelength sample info
-      sample::info<heroλ> si_λ;
-      sample::spectrum(sample_spec, si_λ, rng);
-
       // compute Li along generated ray, add to irradiance
-      heroλ const Li = tracePath(scene, si_λ.val, si.val, rng);
-      irrad_acc.addHeroλ(si_λ.val, Li/si_λ.prob);
+      sample::info<heroλ,heroλ> si_path;
+      tracePath(scene, si.val, si_path, rng);
+      irrad_acc.addHeroλ(si_path.val, si_path.mult);
     }
     irradiance[i*w+j].replaceWith(irrad_acc);
   }
 
+  /// @todo add density-based outlier rejection
   #ifndef DEBUG
   #pragma omp for schedule(static, 16)
   #endif
@@ -61,67 +60,75 @@ void Renderer::render(scene const &scene, rendering &buffer)
 }
 // ****************************************************************************
 
-heroλ Renderer::tracePath(
-  scene const &scene,
-  heroλ const &λ, 
+/// @todo finish converting to sample::info instead of spectrum return
+void Renderer::tracePath(
+  scene const &scene, 
   ray const &r, 
+  sample::info<heroλ,heroλ> pinfo, 
   nl::RNG &rng) const
 {
-  heroλ L(0.f); // radiance accumulation
-  heroλ β(1.f); // throughput
-  ray current = r;
-  float p_light = 0.f; // previous light chosen prob
-  float p_b = 0.f;     // BxDF i sample prob
-  Light const* prev_light = nullptr;
-  uint64_t k=0;
-  for (; k<MAX_CAMERA_SCATTERS; k++)
-  { // accumulate radiance along path
-    hitinfo hinfo;
-    if (!intersect::scene(scene, current, hinfo)) { break; } // exits scene
-    ℝ3 const o = -current.u.normalized();
-    ℝ3 const n = hinfo.n();
+  // sample hero wavelength from light to connect to
+  sample::info<Light const*> si_light;
+  sample::lights(scene.lights, si_light, rng);
+  sample::info<heroλ> si_λ; 
+  sample::radiance(si_light.val, si_λ, rng);
+  pinfo.val = si_λ.val;
+  pinfo.prob = si_λ.prob;
 
-    // hits emitter material
+  ray wi = r;
+  std::vector<hitinfo> cam_subpath;
+  for (int k=0; k<MAX_CAMERA_SCATTERS; k++)
+  { // generate camera subpath
+    hitinfo hinfo;
+    if (!intersect::scene(scene, wi, hinfo)) break;
     Material const &mat = scene.materials[hinfo.mat];
-    if (std::holds_alternative<emitter>(mat)) 
-    { 
-      heroλ const Le = std::get<emitter>(mat).Radiance(λ);
-      if (k==0) { L += β*Le; } // no bounce to compute MIS for
-      else 
-      { // compute MIS weight for emitter
-        float const p_l = p_light*sample::probForLight(prev_light, current); 
-        float const w_b = nl::stoch::PowerHeuristic(1,p_b,1,p_l);
-        L += β*w_b*Le;
-      }
-      break;
+    
+    if (std::holds_alternative<emitter>(mat))
+    { // directly connects to light
+      return std::get<emitter>(mat).Radiance(si_λ.val);
     }
 
-    // add direct illumination
-    sample::info<Light const*> si_light;
-    sample::lights(scene.lights, si_light, rng);
-    sample::info<ℝ3,heroλ> si_Li;
-    sample::light(λ, si_light.val, hinfo, scene, si_Li, rng);
-    heroλ const coef = BxDFcosθ(λ,mat,si_Li.val, o, n, hinfo.front);
-    float const p_l = si_Li.prob*si_light.prob;
-    heroλ const Lo_light = si_Li.mult*coef/p_l;
-    float const mat_pdf = 
-      sample::probForMateriali(λ[0],&mat,hinfo,si_Li.val,o,1.f);
-    float const w_l = nl::stoch::PowerHeuristic(1,p_l,1,mat_pdf);
-    L += β*w_l*Lo_light;
-    
-    // check for scattering
-    sample::info<ℝ3,heroλ> si_f;
-    bool const sample = sample::materiali(λ,&mat,hinfo,o,si_f,rng,SAMPLE_P);
-    if (!sample) { break; }
+    // scatters, add vertex to subpath
+    cam_subpath.push_back(hinfo);
+    ℝ3 const o = -wi.u.normalized();
+    ℝ3 const n = hinfo.n();
+    sample::info<ℝ3, heroλ> si_f;
+    bool sample = sample::materiali(si_λ.val, &mat, hinfo, o, si_f, rng, 1.f);
+    if (!sample) break;
 
-    // update throughput, prep for next loop
-    β *= si_f.mult / si_f.prob;
-    current = {hinfo.p, si_f.val};
-    p_b = si_f.prob;
-    p_light = si_light.prob;
-    prev_light = si_light.val;
+    // update for next loop
+    wi = {hinfo.p, si_f.val};
   }
-  return heroλ(L);
+  uint64_t n = cam_subpath.size();
+  if (n==0) return heroλ(0.f);
+
+  sample::info<ray,heroλ> si_wo;
+  sample::lighto(si_λ.val, si_light.val, si_wo, rng);
+  ray wo = si_wo.val;
+  std::vector<hitinfo> light_subpath;
+  for (int k=0; k<MAX_LIGHT_SCATTERS; k++)
+  { // generate light subpath
+    hitinfo hinfo;
+    if (!intersect::scene(scene, wo, hinfo)) break;
+    Material const &mat = scene.materials[hinfo.mat];
+    
+    if (std::holds_alternative<emitter>(mat)) break;
+
+    // scatters, add vertex to subpath
+    light_subpath.push_back(hinfo);
+    ℝ3 const i = -wo.u.normalized();
+    ℝ3 const n = hinfo.n();
+    sample::info<ℝ3, heroλ> si_f;
+    bool sample = sample::materiali(si_λ.val, &mat, hinfo, i, si_f, rng, 1.f);
+    if (!sample) break;
+
+    // update for next loop
+    wo = {hinfo.p, si_f.val};
+  }
+  uint64_t m = light_subpath.size();
+
+  /// @todo path contribution
+  // evaluate bidirectional path contribution
 }
 // ****************************************************************************
 

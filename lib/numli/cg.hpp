@@ -1576,6 +1576,19 @@ inline void ambientlight(
 }
 inline float probForAmbientLight() { return .5f*inv_π<float>; }
 
+/// @brief generates ray from point light
+inline void pointlighto(
+  heroλ const &l,
+  cg::pointlight const &pl,
+  info<ray,heroλ> linfo,
+  RNG &rng)
+{
+  ℝ3 const ωo = stoch::UnifSphere(rng.flt(),rng.flt());
+  linfo.val = ray(pl.pos,ωo);
+  linfo.prob = .25f*inv_π<float>;
+  linfo.mult = pl.radiant_intensity(l);
+}
+
 /// @brief samples a point light at wavelength l
 inline void pointlight(
   const heroλ &l, 
@@ -1599,6 +1612,19 @@ inline void pointlight(
   info.weight = info.mult;
 }
 constexpr float probForPointLight() {return 0.f;}
+
+
+/// @brief generates ray from dirlight
+inline void dirlighto(
+  heroλ const &l,
+  cg::dirlight const &dl,
+  info<ray,heroλ> linfo,
+  RNG &rng)
+{
+  linfo.val = ray(-1e30f*dl.dir, dl.dir);
+  linfo.prob = 1.f;
+  linfo.mult = dl.radiant_intensity(l);
+}
 
 /// @brief samples the radiant intensity coming from a direction light
 inline void dirlight(
@@ -1667,6 +1693,26 @@ inline float probForQuadDirLight(cg::quaddirlight const &qdl, ray const &r)
     * qdl.inv_area);
 }
 
+/// @brief generates a ray on a spherical light
+inline void spherelighto(
+  heroλ const &l,
+  cg::spherelight const &sl,
+  info<ray,heroλ> &linfo,
+  RNG &rng)
+{
+  // sample point on surface of sphere light
+  ℝ3 const offset = stoch::UnifSphere(rng.flt(), rng.flt());
+  ℝ3 const p = sl._sphere.T.pos()+offset;
+  float const prob_p = .25f*inv_π<float>;
+
+  // sample direction at surface
+  ℝ3 const o = stoch::UnifHemi(rng.flt(),rng.flt());
+  basis const base = orthonormalBasisOf(offset);
+  linfo.val = ray(p, base.toBasis(o));
+  linfo.prob = 0.125f*inv_π<float>*inv_π<float>;
+  linfo.mult = sl.radiance(l);
+}
+
 /// @brief uniformly samples the solid angle of a sphere light from a point
 inline void spherelight(
   const heroλ &l,
@@ -1713,21 +1759,48 @@ inline float probForSphereLight(cg::spherelight const &sl, ray const &r)
   return .5f/(π<float>*sr);
 }
 
-/// @brief light sampling dispatch
+/// @brief light radiance sampling
+constexpr void radiance(Light const *light, info<heroλ> &rinfo, RNG &rng)
+{
+  std:visit(Overload{
+    [&](cg::spherelight const &sl){spectrum(sl.radiance, rinfo, rng);},
+    [&](cg::pointlight const &pl){spectrum(pl.radiant_intensity, rinfo, rng);},
+    [&](cg::dirlight const &dl){spectrum(dl.radiant_intensity, rinfo, rng);},
+    [&](cg::ambientlight const &al){spectrum(al.radiance, rinfo, rng);},
+    [](auto const &){return;}
+  }, *light);
+}
+
+/// @brief outgoing light ray sampling dispatch
+constexpr void lighto(
+  heroλ const &l,
+  Light const *light,
+  info<ray,heroλ> &linfo,
+  RNG &rng)
+{
+  std::visit(Overload{
+    [&](cg::spherelight const &sl){spherelighto(l,sl,linfo,rng);},
+    [&](cg::pointlight const &pl){pointlighto(l,pl,linfo,rng);},
+    [&](cg::dirlight const &dl){dirlighto(l,dl,linfo,rng);},
+    [](auto const &){ return; }
+  }, *light);
+}
+
+/// @brief direct lighting sampling dispatch
 constexpr void light(
   const heroλ &l,
   Light const *light, 
   hitinfo const &hinfo, 
   scene const &sc,
-  info<ℝ3,heroλ> &info,
+  info<ℝ3,heroλ> &linfo,
   RNG &rng)
 {
   std::visit(Overload{
-    [&](cg::spherelight const &sl){spherelight(l,sl,hinfo,sc,info,rng);},
-    [&](cg::quaddirlight const &qdl){quaddirlight(l,qdl,hinfo,sc,info,rng);},
-    [&](cg::pointlight const &pl){pointlight(l,pl,hinfo,sc,info);},
-    [&](cg::dirlight const &dl){dirlight(l,dl,hinfo,sc,info);},
-    [&](cg::ambientlight const &al){ambientlight(l,al,hinfo,info,rng);}
+    [&](cg::spherelight const &sl){spherelight(l,sl,hinfo,sc,linfo,rng);},
+    [&](cg::quaddirlight const &qdl){quaddirlight(l,qdl,hinfo,sc,linfo,rng);},
+    [&](cg::pointlight const &pl){pointlight(l,pl,hinfo,sc,linfo);},
+    [&](cg::dirlight const &dl){dirlight(l,dl,hinfo,sc,linfo);},
+    [&](cg::ambientlight const &al){ambientlight(l,al,hinfo,linfo,rng);}
   }, *light);
 }
 
