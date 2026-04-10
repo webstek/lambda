@@ -1618,8 +1618,7 @@ constexpr float probForPointLight() {return 0.f;}
 inline void dirlighto(
   heroλ const &l,
   cg::dirlight const &dl,
-  info<ray,heroλ> linfo,
-  RNG &rng)
+  info<ray,heroλ> linfo)
 {
   linfo.val = ray(-1e30f*dl.dir, dl.dir);
   linfo.prob = 1.f;
@@ -1703,14 +1702,13 @@ inline void spherelighto(
   // sample point on surface of sphere light
   ℝ3 const offset = stoch::UnifSphere(rng.flt(), rng.flt());
   ℝ3 const p = sl._sphere.T.pos()+offset;
-  float const prob_p = .25f*inv_π<float>;
 
   // sample direction at surface
   ℝ3 const o = stoch::UnifHemi(rng.flt(),rng.flt());
   basis const base = orthonormalBasisOf(offset);
   linfo.val = ray(p, base.toBasis(o));
-  linfo.prob = 0.125f*inv_π<float>*inv_π<float>;
-  linfo.mult = sl.radiance(l);
+  linfo.prob = .125f*inv_π<float>*inv_π<float>;
+  linfo.mult = sl.radiance(l)*abs(o[2]);
 }
 
 /// @brief uniformly samples the solid angle of a sphere light from a point
@@ -1762,7 +1760,7 @@ inline float probForSphereLight(cg::spherelight const &sl, ray const &r)
 /// @brief light radiance sampling
 constexpr void radiance(Light const *light, info<heroλ> &rinfo, RNG &rng)
 {
-  std:visit(Overload{
+  std::visit(Overload{
     [&](cg::spherelight const &sl){spectrum(sl.radiance, rinfo, rng);},
     [&](cg::pointlight const &pl){spectrum(pl.radiant_intensity, rinfo, rng);},
     [&](cg::dirlight const &dl){spectrum(dl.radiant_intensity, rinfo, rng);},
@@ -1772,6 +1770,7 @@ constexpr void radiance(Light const *light, info<heroλ> &rinfo, RNG &rng)
 }
 
 /// @brief outgoing light ray sampling dispatch
+/// @param linfo ray direction o, and radiance times surface cosine
 constexpr void lighto(
   heroλ const &l,
   Light const *light,
@@ -1781,7 +1780,7 @@ constexpr void lighto(
   std::visit(Overload{
     [&](cg::spherelight const &sl){spherelighto(l,sl,linfo,rng);},
     [&](cg::pointlight const &pl){pointlighto(l,pl,linfo,rng);},
-    [&](cg::dirlight const &dl){dirlighto(l,dl,linfo,rng);},
+    [&](cg::dirlight const &dl){dirlighto(l,dl,linfo);},
     [](auto const &){ return; }
   }, *light);
 }

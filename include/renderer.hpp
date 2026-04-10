@@ -1,17 +1,25 @@
 // ****************************************************************************
 /// @file renderer.hpp
 /// @author Kyle Webster
-/// @version 0.3
-/// @date 22 Feb 2026
+/// @version 0.4
+/// @date 10 Apr 2026
 /// @brief Definition of renderer
 // ****************************************************************************
 #pragma once
 // ** Includes ************************
 #include <string>
+#include <filesystem>
 #include <omp.h>
 #include "LodePNG/lodepng.h"
 #include "cg.hpp"
 // ************************************
+
+struct pathvertex
+{
+  nl::cg::hitinfo hinfo;
+  nl::ℝ3 ω_prev;
+  nl::cg::sample::info<nl::ℝ3,nl::cg::heroλ> si_f;
+};
 
 struct rendering
 {
@@ -44,7 +52,7 @@ public:
   void tracePath(
     nl::cg::scene const &scene,
     nl::cg::ray const &ray,
-    sample::info<nl::cg::heroλ,nl::cg::heroλ> pinfo,
+    nl::cg::sample::info<nl::cg::heroλ,nl::cg::heroλ> &pinfo,
     nl::RNG &rng) const;
 
   void saveImage(

@@ -53,7 +53,7 @@ private:
 constexpr ℝ3 UnifHemi(float x0, float x1)
 {
   float const cosθ = 1.f-x0;
-  float const sinθ = constexprSqrt(1.f-cosθ*cosθ);
+  float const sinθ = sqrtf(1.f-cosθ*cosθ);
   float const φ    = 2.f*π<float>*x1;
   return {sinθ*cosf(φ), sinθ*sinf(φ), cosθ};
 }
@@ -61,7 +61,7 @@ constexpr ℝ3 UnifHemi(float x0, float x1)
 constexpr ℝ3 UnifSphere(float x0, float x1)
 {
   float const cosθ = 1.f-2.f*x0;
-  float const sinθ = constexprSqrt(1.f-cosθ*cosθ);
+  float const sinθ = sqrtf(1.f-cosθ*cosθ);
   float const φ = 2.f*π<float>*x1;
   return {sinθ*cosf(φ),sinθ*sinf(φ), cosθ};
 }

@@ -39,10 +39,11 @@ int main(int argc, char **argv)
   // allocate image buffers and renders
   rendering raw_buffer;
   rendering img_buffer;
+  std::string Ystr = "-"+std::format("{:.2f}",Y)+"Y";
   λ.renderer.render(λ.scene, raw_buffer);
-  λ.renderer.saveImage(raw_buffer,fileName,"-raw");
+  λ.renderer.saveImage(raw_buffer,fileName,Ystr+"-raw");
   λ.renderer.toneMap(raw_buffer, img_buffer, Y);
-  λ.renderer.saveImage(img_buffer,fileName);
+  λ.renderer.saveImage(img_buffer,fileName,Ystr);
   
   return 0;
 }

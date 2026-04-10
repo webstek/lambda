@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file renderer.cpp
 /// @author Kyle Webster
-/// @version 0.6
-/// @date 22 Feb 2026
+/// @version 0.7
+/// @date 10 Apr 2026
 /// @brief Renderer implementation
 // ****************************************************************************
 #include "renderer.hpp"
@@ -39,7 +39,7 @@ void Renderer::render(scene const &scene, rendering &buffer)
       // compute Li along generated ray, add to irradiance
       sample::info<heroλ,heroλ> si_path;
       tracePath(scene, si.val, si_path, rng);
-      irrad_acc.addHeroλ(si_path.val, si_path.mult);
+      irrad_acc.addHeroλ(si_path.val, si_path.weight);
     }
     irradiance[i*w+j].replaceWith(irrad_acc);
   }
@@ -60,11 +60,10 @@ void Renderer::render(scene const &scene, rendering &buffer)
 }
 // ****************************************************************************
 
-/// @todo finish converting to sample::info instead of spectrum return
 void Renderer::tracePath(
   scene const &scene, 
   ray const &r, 
-  sample::info<heroλ,heroλ> pinfo, 
+  sample::info<heroλ,heroλ> &pinfo, 
   nl::RNG &rng) const
 {
   // sample hero wavelength from light to connect to
@@ -73,62 +72,109 @@ void Renderer::tracePath(
   sample::info<heroλ> si_λ; 
   sample::radiance(si_light.val, si_λ, rng);
   pinfo.val = si_λ.val;
-  pinfo.prob = si_λ.prob;
+  pinfo.prob = si_λ.prob*si_light.prob;
 
   ray wi = r;
-  std::vector<hitinfo> cam_subpath;
-  for (int k=0; k<MAX_CAMERA_SCATTERS; k++)
+  std::vector<pathvertex> cam_subpath;
+  for (uint64_t k=0; k<MAX_CAMERA_SCATTERS; k++)
   { // generate camera subpath
     hitinfo hinfo;
     if (!intersect::scene(scene, wi, hinfo)) break;
     Material const &mat = scene.materials[hinfo.mat];
     
     if (std::holds_alternative<emitter>(mat))
-    { // directly connects to light
-      return std::get<emitter>(mat).Radiance(si_λ.val);
+    {
+      if (k!=0) { break; } 
+      pinfo.weight = std::get<emitter>(mat).Radiance(si_λ.val)/pinfo.prob;
+      return;
     }
 
     // scatters, add vertex to subpath
-    cam_subpath.push_back(hinfo);
     ℝ3 const o = -wi.u.normalized();
-    ℝ3 const n = hinfo.n();
     sample::info<ℝ3, heroλ> si_f;
     bool sample = sample::materiali(si_λ.val, &mat, hinfo, o, si_f, rng, 1.f);
+    cam_subpath.push_back({hinfo, ℝ3(o), si_f});
     if (!sample) break;
 
     // update for next loop
     wi = {hinfo.p, si_f.val};
   }
   uint64_t n = cam_subpath.size();
-  if (n==0) return heroλ(0.f);
+  if (n==0) { pinfo.weight = heroλ(0.f); return; }
 
   sample::info<ray,heroλ> si_wo;
   sample::lighto(si_λ.val, si_light.val, si_wo, rng);
+  pinfo.prob *= si_wo.prob;
+  pinfo.mult = si_wo.mult;
   ray wo = si_wo.val;
-  std::vector<hitinfo> light_subpath;
-  for (int k=0; k<MAX_LIGHT_SCATTERS; k++)
+  std::vector<pathvertex> light_subpath;
+  for (uint64_t k=0; k<MAX_LIGHT_SCATTERS; k++)
   { // generate light subpath
     hitinfo hinfo;
     if (!intersect::scene(scene, wo, hinfo)) break;
     Material const &mat = scene.materials[hinfo.mat];
-    
     if (std::holds_alternative<emitter>(mat)) break;
 
     // scatters, add vertex to subpath
-    light_subpath.push_back(hinfo);
     ℝ3 const i = -wo.u.normalized();
-    ℝ3 const n = hinfo.n();
     sample::info<ℝ3, heroλ> si_f;
     bool sample = sample::materiali(si_λ.val, &mat, hinfo, i, si_f, rng, 1.f);
+    light_subpath.push_back({hinfo, ℝ3(i), si_f});
     if (!sample) break;
 
     // update for next loop
     wo = {hinfo.p, si_f.val};
   }
   uint64_t m = light_subpath.size();
+  if (m==0) { pinfo.weight = heroλ(0.f); return; }
 
-  /// @todo path contribution
+  /// @todo MIS path contribution
   // evaluate bidirectional path contribution
+  // check visibility between subpaths
+  pathvertex const v_n = cam_subpath[n-1];
+  pathvertex const v_m = light_subpath[m-1];
+  ℝ3 const p_n = ℝ3(v_n.hinfo.p);
+  ℝ3 const p_m = ℝ3(v_m.hinfo.p);
+  ℝ3 const u = (p_m-p_n).normalized();
+  float const L = (p_m-p_n).l2();
+  hitinfo hinfo;
+  hinfo.z = L-1e-1f;
+  if (intersect::scene(scene, {p_n,u}, hinfo)) 
+    { pinfo.weight = heroλ(0.f); return; }
+
+  // connection factor
+  heroλ const f_n = BxDFcosθ(
+    si_λ.val, 
+    scene.materials[v_n.hinfo.mat], 
+    u, 
+    v_n.ω_prev, 
+    v_n.hinfo.n(), 
+    v_n.hinfo.front);
+  heroλ const f_m = BxDFcosθ(
+    si_λ.val,
+    scene.materials[v_m.hinfo.mat],
+    v_m.ω_prev,
+    -u,
+    v_m.hinfo.n(),
+    v_m.hinfo.front);
+  float G = 1.f/(p_m-p_n).len2(); // since cosine factors are in BxDFcosθ
+
+  heroλ bxdfcos = heroλ(1.f);
+  float prob = 1.f;
+  for (uint64_t k=0; k<n-1; k++) 
+  { 
+    bxdfcos *= cam_subpath[k].si_f.mult;
+    prob *= cam_subpath[k].si_f.prob;
+  }
+  for (uint64_t k=0; k<m-1; k++)
+  { 
+    bxdfcos *= light_subpath[k].si_f.mult;
+    prob *= light_subpath[k].si_f.prob;
+  }
+  
+  pinfo.prob *= prob;
+  pinfo.mult *= f_n*f_m*G*bxdfcos;
+  pinfo.weight = pinfo.mult/pinfo.prob;
 }
 // ****************************************************************************
 
@@ -165,10 +211,14 @@ void Renderer::toneMap(
 void Renderer::saveImage(
   rendering const &buffer, std::string fpath, std::string suffix) const
 {
-  std::string fname = "render"+
-    fpath.substr(6,fpath.length()-10)+"-"+std::to_string(SPP)+"spp-"
-    +std::to_string(MAX_CAMERA_SCATTERS)+"b-"
-    +std::format("{:.2f}", SAMPLE_P)+"p"+suffix+".png";
+  std::filesystem::create_directories("render");
+
+  std::string stem = std::filesystem::path(fpath).stem().string();
+  std::string fname = "render/" + stem
+    + "-" + std::to_string(SPP) + "spp-"
+    + std::to_string(MAX_CAMERA_SCATTERS) + "b-"
+    + std::to_string(MAX_LIGHT_SCATTERS) + "l-"
+    + std::format("{:.2f}", SAMPLE_P) + "p" + suffix + ".png";
   
   std::vector<rgb24> const display = buffer.rgb24();
   lodepng::encode(
