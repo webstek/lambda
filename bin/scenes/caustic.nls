@@ -13,7 +13,7 @@
       "name": "sphere-light",
       "type": "sphere",
       "transform": {"translate": [0,10,12], "scale":[1,1,1]},
-      "radiance": {"val": "spectra/CIE_std_illum_D65.csv", "mult": 0.3}}],
+      "radiance": {"val": "spectra/CIE_std_illum_D65.csv", "mult": 0.003}}],
   "objects": [
     {
       "name": "dragon",

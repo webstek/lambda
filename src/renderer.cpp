@@ -128,7 +128,7 @@ void Renderer::tracePath(
   uint64_t m = light_subpath.size();
   if (m==0) { pinfo.weight = heroλ(0.f); return; }
 
-  /// @todo MIS path contribution
+  /// @todo all MIS path contribution
   // evaluate bidirectional path contribution
   // check visibility between subpaths
   pathvertex const v_n = cam_subpath[n-1];
@@ -136,44 +136,71 @@ void Renderer::tracePath(
   ℝ3 const p_n = ℝ3(v_n.hinfo.p);
   ℝ3 const p_m = ℝ3(v_m.hinfo.p);
   ℝ3 const u = (p_m-p_n).normalized();
-  float const L = (p_m-p_n).l2();
+  float L = (p_m-p_n).l2();
   hitinfo hinfo;
-  hinfo.z = L-1e-1f;
-  if (intersect::scene(scene, {p_n,u}, hinfo)) 
-    { pinfo.weight = heroλ(0.f); return; }
+  hinfo.z = L-nl::ε<float>;
+  float full_prob = 0.f;
+  heroλ full_mult = heroλ(0.f);
+  if (!intersect::scene(scene, {p_n,u}, hinfo)) 
+  {
+    // connection factor
+    heroλ const f_n = BxDFcosθ(
+      si_λ.val, 
+      scene.materials[v_n.hinfo.mat], 
+      u, 
+      v_n.ω_prev, 
+      v_n.hinfo.n(), 
+      v_n.hinfo.front);
+    heroλ const f_m = BxDFcosθ(
+      si_λ.val,
+      scene.materials[v_m.hinfo.mat],
+      v_m.ω_prev,
+      -u,
+      v_m.hinfo.n(),
+      v_m.hinfo.front);
+    float G = (abs(v_m.hinfo.n()|u))/(p_m-p_n).len2();
 
-  // connection factor
-  heroλ const f_n = BxDFcosθ(
-    si_λ.val, 
-    scene.materials[v_n.hinfo.mat], 
-    u, 
-    v_n.ω_prev, 
-    v_n.hinfo.n(), 
-    v_n.hinfo.front);
-  heroλ const f_m = BxDFcosθ(
-    si_λ.val,
-    scene.materials[v_m.hinfo.mat],
-    v_m.ω_prev,
-    -u,
-    v_m.hinfo.n(),
-    v_m.hinfo.front);
-  float G = 1.f/(p_m-p_n).len2(); // since cosine factors are in BxDFcosθ
-
-  heroλ bxdfcos = heroλ(1.f);
-  float prob = 1.f;
-  for (uint64_t k=0; k<n-1; k++) 
-  { 
-    bxdfcos *= cam_subpath[k].si_f.mult;
-    prob *= cam_subpath[k].si_f.prob;
-  }
-  for (uint64_t k=0; k<m-1; k++)
-  { 
-    bxdfcos *= light_subpath[k].si_f.mult;
-    prob *= light_subpath[k].si_f.prob;
+    heroλ bxdfcos = heroλ(1.f);
+    float prob = 1.f;
+    for (uint64_t k=0; k<n-1; k++) 
+    { 
+      bxdfcos *= cam_subpath[k].si_f.mult;
+      prob *= cam_subpath[k].si_f.prob;
+    }
+    for (uint64_t k=0; k<m-1; k++)
+    { 
+      bxdfcos *= light_subpath[k].si_f.mult;
+      prob *= light_subpath[k].si_f.prob;
+    }
+    full_prob = pinfo.prob*prob;
+    full_mult = pinfo.mult*f_n*f_m*G*bxdfcos;
   }
   
-  pinfo.prob *= prob;
-  pinfo.mult *= f_n*f_m*G*bxdfcos;
+  // direct lighting
+  // visibility
+  auto const v_0 = cam_subpath[0];
+  ℝ3 v = si_wo.val.p-v_0.hinfo.p;
+  L = v.l2();
+  v.normalize();
+  hinfo.z = L-nl::ε<float>;
+  float dir_prob = 0.f;
+  heroλ dir_mult = heroλ(0.f);
+  sample::info<ℝ3,heroλ> si_dirL;
+  sample::light(si_λ.val, si_light.val, v_0.hinfo, scene, si_dirL, rng);
+  {
+    heroλ const f_0 = BxDFcosθ(
+      si_λ.val,
+      scene.materials[v_0.hinfo.mat],
+      si_dirL.val,
+      v_0.ω_prev,
+      v_0.hinfo.n(),
+      v_0.hinfo.front);
+      dir_prob = si_λ.prob*si_light.prob*si_dirL.prob;
+      dir_mult = si_dirL.mult*f_0;
+    }
+  pinfo.prob = full_prob+dir_prob;
+  if (full_prob!=0.f) pinfo.mult = full_mult;
+  pinfo.mult += dir_mult;
   pinfo.weight = pinfo.mult/pinfo.prob;
 }
 // ****************************************************************************
