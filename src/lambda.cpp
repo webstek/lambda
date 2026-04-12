@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file lambda.cpp
 /// @author Kyle Webster
-/// @version 0.2
-/// @date 22 Feb 2026
+/// @version 1.0
+/// @date 11 Apr 2026
 /// @brief λ (Lambda) program implementation
 // ****************************************************************************
 #include "lambda.hpp"

@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file main.cpp
 /// @author Kyle Webster
-/// @version 0.3
-/// @date Feb 22 2026
+/// @version 1.0
+/// @date 11 Apr 2026
 /// @brief program entry point
 // ****************************************************************************
 #include <print>
@@ -16,7 +16,7 @@ int main(int argc, char **argv)
   
   Lambda λ;
   // check command line arguments
-  float Y=0.12f;
+  float Y=0.18f;
   int argn;
   while ((argn = getopt(argc, argv, "b:s:p:Y:")) != -1)
   {
@@ -38,10 +38,11 @@ int main(int argc, char **argv)
   // allocate image buffers and renders
   rendering raw_buffer;
   rendering img_buffer;
+  std::string Ystr = "-"+std::format("{:.2f}",Y)+"Y";
   λ.renderer.render(λ.scene, raw_buffer);
-  λ.renderer.saveImage(raw_buffer,fileName,"-raw");
+  λ.renderer.saveImage(raw_buffer,fileName,Ystr+"-raw");
   λ.renderer.toneMap(raw_buffer, img_buffer, Y);
-  λ.renderer.saveImage(img_buffer,fileName);
+  λ.renderer.saveImage(img_buffer,fileName,Ystr);
   
   return 0;
 }

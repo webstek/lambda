@@ -1,8 +1,8 @@
 // ****************************************************************************
 /// @file renderer.cpp
 /// @author Kyle Webster
-/// @version 0.6
-/// @date 22 Feb 2026
+/// @version 1.0
+/// @date 11 Apr 2026
 /// @brief Renderer implementation
 // ****************************************************************************
 #include "renderer.hpp"
@@ -179,10 +179,13 @@ void Renderer::toneMap(
 void Renderer::saveImage(
   rendering const &buffer, std::string fpath, std::string suffix) const
 {
-  std::string fname = "render"+
-    fpath.substr(6,fpath.length()-10)+"-"+std::to_string(SPP)+"spp-"
-    +std::to_string(MAX_SCATTERINGS)+"b-"
-    +std::format("{:.2f}", SAMPLE_P)+"p"+suffix+".png";
+  std::filesystem::create_directories("render");
+
+  std::string stem = std::filesystem::path(fpath).stem().string();
+  std::string fname = "render/" + stem
+    + "-" + std::to_string(SPP) + "spp-"
+    + std::to_string(MAX_SCATTERINGS) + "b-"
+    + std::format("{:.2f}", SAMPLE_P) + "p" + suffix + ".png";
   
   std::vector<rgb24> const display = buffer.rgb24();
   lodepng::encode(
